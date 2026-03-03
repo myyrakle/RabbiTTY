@@ -544,7 +544,7 @@ impl From<&AppConfig> for FileConfig {
 
 fn config_path() -> Option<PathBuf> {
     let home = dirs::home_dir()?;
-    Some(home.join(".config").join("rabitty").join("config.toml"))
+    Some(home.join(".config").join("rabbitty").join("config.toml"))
 }
 
 fn ensure_config_file(path: &Path) -> std::io::Result<()> {
