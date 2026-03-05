@@ -44,10 +44,15 @@ impl App {
             let dims = active_tab.size();
             let cells = active_tab.render_cells();
             let grid_size = dims;
-            let terminal_stack = TerminalProgram { cells, grid_size }
-                .widget()
-                .width(Length::Fill)
-                .height(Length::Fill);
+            let terminal_stack = TerminalProgram {
+                cells,
+                grid_size,
+                terminal_font_selection: self.config.terminal.font_selection.clone(),
+                terminal_font_size: self.config.terminal.font_size,
+            }
+            .widget()
+            .width(Length::Fill)
+            .height(Length::Fill);
 
             terminal_stack.into()
         } else {
@@ -291,6 +296,7 @@ impl App {
             self.settings_category,
             &self.config,
             &self.settings_draft,
+            &self.terminal_font_options,
         ))
         .padding([0, 12])
         .width(Length::Fill);

@@ -2757,6 +2757,7 @@ dependencies = [
  "alacritty_terminal",
  "bytemuck",
  "dirs",
+ "fontdb",
  "futures",
  "iced",
  "objc2-app-kit 0.3.2",

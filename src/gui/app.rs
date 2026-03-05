@@ -1,7 +1,8 @@
 use crate::config::AppConfig;
-use crate::gui::settings::{SettingsCategory, SettingsDraft, SettingsField};
+use crate::gui::settings::{SettingsCategory, SettingsDraft, SettingsField, TerminalFontOption};
 use crate::gui::tab::{ShellKind, TerminalTab};
 use crate::session::OutputEvent;
+use crate::terminal_font::discover_system_terminal_fonts;
 use iced::Size;
 use iced::futures::channel::mpsc;
 use iced::keyboard::{Key, Modifiers};
@@ -59,6 +60,7 @@ pub struct App {
     settings_open: bool,
     settings_category: SettingsCategory,
     settings_draft: SettingsDraft,
+    terminal_font_options: Vec<TerminalFontOption>,
     config: AppConfig,
     pty_sender: Option<mpsc::Sender<OutputEvent>>,
     next_tab_id: u64,
@@ -82,6 +84,9 @@ impl App {
             settings_open: false,
             settings_category: SettingsCategory::Ui,
             settings_draft: SettingsDraft::from_config(&config),
+            terminal_font_options: build_terminal_font_options(
+                config.terminal.font_selection.as_deref(),
+            ),
             config,
             pty_sender: None,
             next_tab_id: 1,
@@ -137,4 +142,32 @@ pub(super) fn theme_color(rgb: [u8; 3], alpha: f32) -> iced::Color {
         b: f32::from(rgb[2]) / 255.0,
         a: alpha,
     }
+}
+
+fn build_terminal_font_options(selected: Option<&str>) -> Vec<TerminalFontOption> {
+    let mut options = Vec::new();
+    options.push(TerminalFontOption {
+        label: "DejaVu Sans Mono (Bundled)".to_string(),
+        value: String::new(),
+    });
+
+    options.extend(
+        discover_system_terminal_fonts()
+            .into_iter()
+            .map(|family| TerminalFontOption {
+                label: family.clone(),
+                value: family,
+            }),
+    );
+
+    if let Some(value) = selected.map(str::trim).filter(|value| !value.is_empty())
+        && !options.iter().any(|option| option.value == value)
+    {
+        options.push(TerminalFontOption {
+            label: format!("{value} (Legacy)"),
+            value: value.to_string(),
+        });
+    }
+
+    options
 }

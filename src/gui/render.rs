@@ -18,6 +18,8 @@ use text::TextPipelineData;
 pub struct TerminalProgram {
     pub cells: Arc<Vec<CellVisual>>,
     pub grid_size: TerminalSize,
+    pub terminal_font_selection: Option<String>,
+    pub terminal_font_size: f32,
 }
 
 impl TerminalProgram {
@@ -51,6 +53,8 @@ impl ShaderProgram<crate::gui::app::Message> for TerminalProgram {
             viewport: [bounds.width, bounds.height],
             offset: [0.0, 0.0],
             clear_color,
+            terminal_font_selection: self.terminal_font_selection.clone(),
+            terminal_font_size: self.terminal_font_size,
             // offset: [bounds.x, bounds.y],
         }
     }
@@ -305,6 +309,8 @@ pub struct TerminalPrimitive {
     viewport: [f32; 2],
     offset: [f32; 2],
     clear_color: [f32; 4],
+    terminal_font_selection: Option<String>,
+    terminal_font_size: f32,
 }
 
 impl Primitive for TerminalPrimitive {
@@ -339,6 +345,12 @@ impl Primitive for TerminalPrimitive {
         }
 
         {
+            pipeline
+                .text
+                .apply_terminal_font_selection(device, self.terminal_font_selection.as_deref());
+            pipeline
+                .text
+                .set_requested_font_size(self.terminal_font_size);
             pipeline.text.update_uniforms(queue, viewport, offset);
             pipeline
                 .text

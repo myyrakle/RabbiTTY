@@ -3,11 +3,24 @@ use crate::gui::app::Message;
 use crate::gui::theme::{Palette, RADIUS_NORMAL, SPACING_NORMAL, SPACING_SMALL};
 use iced::widget::{column, container, row, text, text_input, toggler};
 use iced::{Alignment, Background, Border, Color, Element, Length};
+use std::fmt;
 
 pub mod shortcuts;
 pub mod terminal;
 pub mod theme;
 pub mod ui;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalFontOption {
+    pub label: String,
+    pub value: String,
+}
+
+impl fmt::Display for TerminalFontOption {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.label)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsField {
@@ -15,6 +28,8 @@ pub enum SettingsField {
     UiWindowHeight,
     TerminalCellWidth,
     TerminalCellHeight,
+    TerminalFontSelection,
+    TerminalFontSize,
     ThemeForeground,
     ThemeBackground,
     ThemeCursor,
@@ -56,6 +71,8 @@ pub struct SettingsDraft {
     pub window_height: String,
     pub cell_width: String,
     pub cell_height: String,
+    pub terminal_font_selection: String,
+    pub terminal_font_size: String,
     pub foreground: String,
     pub background: String,
     pub cursor: String,
@@ -78,6 +95,8 @@ impl SettingsDraft {
             window_height: format!("{:.0}", config.ui.window_height),
             cell_width: format!("{:.1}", config.terminal.cell_width),
             cell_height: format!("{:.1}", config.terminal.cell_height),
+            terminal_font_selection: config.terminal.font_selection.clone().unwrap_or_default(),
+            terminal_font_size: format!("{:.1}", config.terminal.font_size),
             foreground: format_rgb(config.theme.foreground),
             background: format_rgb(config.theme.background),
             cursor: format_rgb(config.theme.cursor),
@@ -100,6 +119,8 @@ impl SettingsDraft {
             SettingsField::UiWindowHeight => self.window_height = value,
             SettingsField::TerminalCellWidth => self.cell_width = value,
             SettingsField::TerminalCellHeight => self.cell_height = value,
+            SettingsField::TerminalFontSelection => self.terminal_font_selection = value,
+            SettingsField::TerminalFontSize => self.terminal_font_size = value,
             SettingsField::ThemeForeground => self.foreground = value,
             SettingsField::ThemeBackground => self.background = value,
             SettingsField::ThemeCursor => self.cursor = value,
@@ -126,6 +147,8 @@ impl SettingsDraft {
             window_height: parse_f32(&self.window_height),
             cell_width: parse_f32(&self.cell_width),
             cell_height: parse_f32(&self.cell_height),
+            terminal_font_selection: Some(self.terminal_font_selection.clone()),
+            terminal_font_size: parse_f32(&self.terminal_font_size),
             foreground: parse_hex_color(&self.foreground),
             background: parse_hex_color(&self.background),
             cursor: parse_hex_color(&self.cursor),
@@ -168,10 +191,11 @@ pub fn view_category<'a>(
     category: SettingsCategory,
     config: &'a AppConfig,
     draft: &'a SettingsDraft,
+    terminal_font_options: &'a [TerminalFontOption],
 ) -> Element<'a, Message> {
     match category {
         SettingsCategory::Ui => ui::view(config, draft),
-        SettingsCategory::Terminal => terminal::view(config, draft),
+        SettingsCategory::Terminal => terminal::view(config, draft, terminal_font_options),
         SettingsCategory::Theme => theme::view(config, draft),
         SettingsCategory::Shortcuts => shortcuts::view(config, draft),
     }

@@ -1,9 +1,11 @@
-use crate::config::FONT_SCALE_FACTOR;
+use crate::config::DEFAULT_TERMINAL_FONT_SIZE;
 use crate::terminal::CellVisual;
+use crate::terminal_font::load_system_font_by_family;
 use ab_glyph::{Font, FontArc, PxScale, ScaleFont, point};
 use bytemuck::{Pod, Zeroable};
 use iced::wgpu;
 use std::collections::HashMap;
+use std::fs;
 
 const DEJAVU_SANS_MONO: &[u8] = include_bytes!("../../../fonts/DejaVuSansMono.ttf");
 const ATLAS_INITIAL_SIZE: u32 = 2048;
@@ -130,6 +132,7 @@ pub(super) struct TextPipelineData {
     font: FontArc,
     scale: PxScale,
     font_px: f32,
+    requested_font_size: f32,
     ascent: f32,
     descent: f32,
     line_height: f32,
@@ -140,6 +143,7 @@ pub(super) struct TextPipelineData {
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     instance_len: usize,
+    requested_font_selection: Option<String>,
 }
 
 fn align_to(value: u32, alignment: u32) -> u32 {
@@ -318,6 +322,7 @@ impl TextPipelineData {
             font,
             scale,
             font_px: 0.0,
+            requested_font_size: DEFAULT_TERMINAL_FONT_SIZE,
             ascent: 0.0,
             descent: 0.0,
             line_height: 0.0,
@@ -328,6 +333,34 @@ impl TextPipelineData {
             instance_buffer,
             instance_capacity: 64,
             instance_len: 0,
+            requested_font_selection: None,
+        }
+    }
+
+    pub(super) fn apply_terminal_font_selection(
+        &mut self,
+        device: &wgpu::Device,
+        font_selection: Option<&str>,
+    ) {
+        let requested_font_selection = font_selection
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(ToOwned::to_owned);
+        if requested_font_selection == self.requested_font_selection {
+            return;
+        }
+        self.requested_font_selection = requested_font_selection.clone();
+
+        let next_font = requested_font_selection
+            .as_deref()
+            .and_then(load_font_from_selection)
+            .unwrap_or_else(default_terminal_font);
+        self.set_font(device, next_font);
+    }
+
+    pub(super) fn set_requested_font_size(&mut self, font_size: f32) {
+        if font_size.is_finite() && font_size > 0.0 {
+            self.requested_font_size = font_size;
         }
     }
 
@@ -351,7 +384,7 @@ impl TextPipelineData {
         let cell_width = cell_size[0];
         let cell_height = cell_size[1];
 
-        let mut font_px = (cell_height * FONT_SCALE_FACTOR).max(1.0);
+        let mut font_px = self.requested_font_size.max(1.0);
         self.ensure_font_size(font_px);
         if cell_width > 0.0 && self.cell_advance > cell_width {
             let scale = cell_width / self.cell_advance;
@@ -495,6 +528,19 @@ impl TextPipelineData {
         self.cell_advance = advance;
         self.glyphs.clear();
         self.atlas.packer.reset(self.atlas.size);
+    }
+
+    fn set_font(&mut self, device: &wgpu::Device, font: FontArc) {
+        self.font = font;
+        self.font_px = 0.0;
+        self.scale = PxScale::from(1.0);
+        self.ascent = 0.0;
+        self.descent = 0.0;
+        self.line_height = 0.0;
+        self.line_min_y = 0.0;
+        self.cell_advance = 0.0;
+        self.glyphs.clear();
+        self.rebuild_atlas(device, self.atlas.size);
     }
 
     fn rebuild_atlas(&mut self, device: &wgpu::Device, size: u32) {
@@ -650,4 +696,17 @@ impl TextPipelineData {
         self.glyphs.insert(ch, info);
         Some(info)
     }
+}
+
+fn default_terminal_font() -> FontArc {
+    FontArc::try_from_slice(DEJAVU_SANS_MONO).expect("font load failed")
+}
+
+fn load_font_from_path(path: &str) -> Option<FontArc> {
+    let bytes = fs::read(path).ok()?;
+    FontArc::try_from_vec(bytes).ok()
+}
+
+fn load_font_from_selection(selection: &str) -> Option<FontArc> {
+    load_system_font_by_family(selection).or_else(|| load_font_from_path(selection))
 }

@@ -44,7 +44,7 @@ pub const DEFAULT_SHORTCUT_QUIT: &str = "Command+Q";
 #[cfg(not(target_os = "macos"))]
 pub const DEFAULT_SHORTCUT_QUIT: &str = "Ctrl+Q";
 
-const DEFAULT_FONT_PX: f32 = 14.0;
+pub const DEFAULT_TERMINAL_FONT_SIZE: f32 = 14.0;
 const DEJAVU_SANS_MONO: &[u8] = include_bytes!("../fonts/DejaVuSansMono.ttf");
 
 #[derive(Debug, Clone)]
@@ -65,6 +65,8 @@ pub struct UiConfig {
 pub struct TerminalConfig {
     pub cell_width: f32,
     pub cell_height: f32,
+    pub font_selection: Option<String>,
+    pub font_size: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -106,6 +108,10 @@ struct UiFileConfig {
 struct TerminalFileConfig {
     cell_width: Option<f32>,
     cell_height: Option<f32>,
+    font_selection: Option<String>,
+    #[serde(alias = "font_path")]
+    legacy_font_path: Option<String>,
+    font_size: Option<f32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -135,6 +141,8 @@ pub struct AppConfigUpdates {
     pub window_height: Option<f32>,
     pub cell_width: Option<f32>,
     pub cell_height: Option<f32>,
+    pub terminal_font_selection: Option<String>,
+    pub terminal_font_size: Option<f32>,
     pub foreground: Option<[u8; 3]>,
     pub background: Option<[u8; 3]>,
     pub cursor: Option<[u8; 3]>,
@@ -161,6 +169,8 @@ impl Default for AppConfig {
             terminal: TerminalConfig {
                 cell_width,
                 cell_height,
+                font_selection: None,
+                font_size: DEFAULT_TERMINAL_FONT_SIZE,
             },
             theme: ThemeConfig {
                 foreground: DEFAULT_THEME_FOREGROUND,
@@ -209,6 +219,12 @@ impl AppConfig {
         }
         if let Some(height) = updates.cell_height {
             self.terminal.cell_height = sanitize_positive(height, self.terminal.cell_height);
+        }
+        if let Some(selection) = updates.terminal_font_selection {
+            self.terminal.font_selection = sanitize_terminal_font_selection(&selection);
+        }
+        if let Some(size) = updates.terminal_font_size {
+            self.terminal.font_size = sanitize_terminal_font_size(size, self.terminal.font_size);
         }
         if let Some(foreground) = updates.foreground {
             self.theme.foreground = foreground;
@@ -291,6 +307,15 @@ impl AppConfig {
 
             self.terminal.cell_width = cell_width;
             self.terminal.cell_height = cell_height;
+            self.terminal.font_selection = term
+                .font_selection
+                .as_deref()
+                .or(term.legacy_font_path.as_deref())
+                .and_then(sanitize_terminal_font_selection);
+            if let Some(size) = term.font_size {
+                self.terminal.font_size =
+                    sanitize_terminal_font_size(size, self.terminal.font_size);
+            }
         }
 
         if let Some(theme) = file.theme {
@@ -382,6 +407,23 @@ fn sanitize_macos_material(value: &str, fallback: &str) -> String {
 
 fn sanitize_shortcut(value: &str, fallback: &str) -> String {
     normalize_shortcut(value).unwrap_or_else(|| fallback.to_string())
+}
+
+fn sanitize_terminal_font_selection(value: &str) -> Option<String> {
+    let selection = value.trim();
+    if selection.is_empty() {
+        None
+    } else {
+        Some(selection.to_string())
+    }
+}
+
+fn sanitize_terminal_font_size(value: f32, fallback: f32) -> f32 {
+    if value.is_finite() && (6.0..=72.0).contains(&value) {
+        value
+    } else {
+        fallback
+    }
 }
 
 fn normalize_shortcut(value: &str) -> Option<String> {
@@ -507,6 +549,9 @@ impl From<&AppConfig> for FileConfig {
             terminal: Some(TerminalFileConfig {
                 cell_width: Some(config.terminal.cell_width),
                 cell_height: Some(config.terminal.cell_height),
+                font_selection: config.terminal.font_selection.clone(),
+                legacy_font_path: None,
+                font_size: Some(config.terminal.font_size),
             }),
             theme: Some(ThemeFileConfig {
                 foreground: Some(format!(
@@ -560,11 +605,12 @@ fn ensure_config_file(path: &Path) -> std::io::Result<()> {
 fn default_config_toml() -> String {
     let (cell_width, cell_height) = default_cell_metrics();
     format!(
-        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\ncell_width = {cell_width:.1}\ncell_height = {cell_height:.1}\n\n[theme]\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_material = \"{macos_blur_material}\"\nmacos_blur_alpha = {macos_blur_alpha:.2}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\n",
+        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\ncell_width = {cell_width:.1}\ncell_height = {cell_height:.1}\nfont_selection = \"\"\nfont_size = {font_size:.1}\n\n[theme]\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_material = \"{macos_blur_material}\"\nmacos_blur_alpha = {macos_blur_alpha:.2}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\n",
         width = DEFAULT_WINDOW_WIDTH as u32,
         height = DEFAULT_WINDOW_HEIGHT as u32,
         cell_width = cell_width,
         cell_height = cell_height,
+        font_size = DEFAULT_TERMINAL_FONT_SIZE,
         fg = DEFAULT_THEME_FOREGROUND[0],
         fg_g = DEFAULT_THEME_FOREGROUND[1],
         fg_b = DEFAULT_THEME_FOREGROUND[2],
@@ -589,7 +635,7 @@ fn default_config_toml() -> String {
 
 fn default_cell_metrics() -> (f32, f32) {
     let font = FontArc::try_from_slice(DEJAVU_SANS_MONO).expect("font load failed");
-    let scale = PxScale::from(DEFAULT_FONT_PX);
+    let scale = PxScale::from(DEFAULT_TERMINAL_FONT_SIZE);
     let scaled = font.as_scaled(scale);
     let ascent = scaled.ascent();
 
@@ -630,7 +676,7 @@ fn default_cell_metrics() -> (f32, f32) {
         advance = (line_height * 0.6).max(1.0);
     }
 
-    let cell_height = (DEFAULT_FONT_PX / FONT_SCALE_FACTOR).max(1.0);
+    let cell_height = (DEFAULT_TERMINAL_FONT_SIZE / FONT_SCALE_FACTOR).max(1.0);
     let cell_width = advance.max(1.0);
     (cell_width, cell_height)
 }
@@ -705,5 +751,81 @@ mod tests {
         );
         assert_eq!(config.shortcuts.new_tab, original.shortcuts.new_tab);
         assert_eq!(config.shortcuts.close_tab, "Ctrl+W");
+    }
+
+    #[test]
+    fn apply_updates_terminal_font_selection_and_size_are_sanitized() {
+        let mut config = AppConfig::default();
+        let default_size = config.terminal.font_size;
+
+        config.apply_updates(AppConfigUpdates {
+            terminal_font_selection: Some(" Fira Code ".to_string()),
+            terminal_font_size: Some(18.5),
+            ..Default::default()
+        });
+        assert_eq!(
+            config.terminal.font_selection,
+            Some("Fira Code".to_string())
+        );
+        assert_eq!(config.terminal.font_size, 18.5);
+
+        config.apply_updates(AppConfigUpdates {
+            terminal_font_selection: Some("   ".to_string()),
+            terminal_font_size: Some(4.0),
+            ..Default::default()
+        });
+        assert_eq!(config.terminal.font_selection, None);
+        assert_eq!(config.terminal.font_size, 18.5);
+
+        config.apply_updates(AppConfigUpdates {
+            terminal_font_size: Some(f32::NAN),
+            ..Default::default()
+        });
+        assert_eq!(config.terminal.font_size, 18.5);
+
+        config.apply_updates(AppConfigUpdates {
+            terminal_font_size: Some(default_size),
+            ..Default::default()
+        });
+        assert_eq!(config.terminal.font_size, default_size);
+    }
+
+    #[test]
+    fn file_config_terminal_font_selection_supports_legacy_alias() {
+        let mut config = AppConfig::default();
+        let file = toml::from_str::<FileConfig>(
+            r#"
+            [terminal]
+            font_path = "  Legacy Font  "
+            font_size = 15.0
+            "#,
+        )
+        .expect("file config should parse");
+
+        config.apply_file(file);
+        assert_eq!(
+            config.terminal.font_selection,
+            Some("Legacy Font".to_string())
+        );
+        assert_eq!(config.terminal.font_size, 15.0);
+    }
+
+    #[test]
+    fn file_config_terminal_font_selection_prefers_new_key() {
+        let mut config = AppConfig::default();
+        let file = toml::from_str::<FileConfig>(
+            r#"
+            [terminal]
+            font_selection = " JetBrains Mono "
+            font_path = " Legacy Font "
+            "#,
+        )
+        .expect("file config should parse");
+
+        config.apply_file(file);
+        assert_eq!(
+            config.terminal.font_selection,
+            Some("JetBrains Mono".to_string())
+        );
     }
 }
