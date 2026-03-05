@@ -8,9 +8,9 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-pub struct LaunchSpec<'a> {
-    pub program: &'a str,
-    pub args: &'a [&'a str],
+pub struct LaunchSpec {
+    pub program: String,
+    pub args: Vec<String>,
     pub rows: u16,
     pub cols: u16,
 }
@@ -36,7 +36,7 @@ pub enum OutputEvent {
 
 impl Session {
     pub fn spawn(
-        spec: LaunchSpec<'_>,
+        spec: LaunchSpec,
         tab_id: u64,
         mut output_tx: mpsc::Sender<OutputEvent>,
     ) -> Result<Self, SessionError> {
@@ -50,8 +50,8 @@ impl Session {
             })
             .map_err(|err| SessionError::Spawn(format!("openpty failed: {err}")))?;
 
-        let mut cmd = CommandBuilder::new(spec.program);
-        for arg in spec.args {
+        let mut cmd = CommandBuilder::new(&spec.program);
+        for arg in &spec.args {
             cmd.arg(arg);
         }
 
@@ -128,6 +128,7 @@ impl Session {
     }
 
     /// 세션(자식 프로세스)이 아직 살아있는지 확인
+    #[allow(dead_code)]
     pub fn is_alive(&mut self) -> bool {
         if let Some(ref mut child) = self.child {
             // try_wait: None이면 아직 실행 중, Some이면 종료됨

@@ -4,11 +4,13 @@ use iced::futures::channel::mpsc;
 use iced::keyboard::{Key, Modifiers, key::Named};
 use std::fmt::{Display, Formatter};
 use std::io::Write;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 pub struct TerminalTab {
     pub id: u64,
     pub title: String,
+    #[allow(dead_code)]
     pub shell: ShellKind,
     pub session: TerminalSession,
     engine: TerminalEngine,
@@ -16,6 +18,7 @@ pub struct TerminalTab {
 
 pub enum TerminalSession {
     Active(Session),
+    #[allow(dead_code)]
     Failed(String),
 }
 
@@ -40,7 +43,9 @@ impl TerminalTab {
         output_tx: mpsc::Sender<OutputEvent>,
     ) -> Self {
         let size = TerminalSize::new(columns, lines);
-        let (session, writer) = match Session::spawn(shell.launch_spec(size), id, output_tx) {
+        let launch_spec = shell.launch_spec(size);
+        let title = shell.title_from_program(&launch_spec.program);
+        let (session, writer) = match Session::spawn(launch_spec, id, output_tx) {
             Ok(session) => {
                 let writer = session.writer();
                 (TerminalSession::Active(session), writer)
@@ -55,7 +60,7 @@ impl TerminalTab {
 
         Self {
             id,
-            title: shell.to_string(),
+            title,
             shell,
             session,
             engine: TerminalEngine::new(size, 10_000, writer, theme),
@@ -66,6 +71,7 @@ impl TerminalTab {
         self.engine.feed_bytes(bytes);
     }
 
+    #[allow(dead_code)]
     pub fn status_text(&self) -> String {
         match &self.session {
             TerminalSession::Active(_) => "Session: live".into(),
@@ -85,6 +91,7 @@ impl TerminalTab {
         self.engine.size()
     }
 
+    #[allow(dead_code)]
     pub fn is_alive(&mut self) -> bool {
         match &mut self.session {
             TerminalSession::Active(session) => session.is_alive(),
@@ -181,14 +188,23 @@ pub enum ShellKind {
 }
 
 impl ShellKind {
-    fn launch_spec(self, size: TerminalSize) -> LaunchSpec<'static> {
-        let (program, args): (&str, &[&str]) = match self {
-            #[cfg(target_family = "unix")]
-            ShellKind::Zsh => ("zsh", &["-i"]),
-            #[cfg(target_family = "windows")]
-            ShellKind::Cmd => ("cmd", &["/Q", "/K"]),
-            #[cfg(target_family = "windows")]
-            ShellKind::PowerShell => ("powershell", &["-NoLogo", "-ExecutionPolicy", "Bypass"]),
+    fn launch_spec(self, size: TerminalSize) -> LaunchSpec {
+        #[cfg(target_family = "unix")]
+        let (program, args): (String, Vec<String>) = match self {
+            ShellKind::Zsh => resolve_unix_shell(),
+        };
+
+        #[cfg(target_family = "windows")]
+        let (program, args): (String, Vec<String>) = match self {
+            ShellKind::Cmd => ("cmd".to_string(), vec!["/Q".to_string(), "/K".to_string()]),
+            ShellKind::PowerShell => (
+                "powershell".to_string(),
+                vec![
+                    "-NoLogo".to_string(),
+                    "-ExecutionPolicy".to_string(),
+                    "Bypass".to_string(),
+                ],
+            ),
         };
 
         LaunchSpec {
@@ -198,13 +214,61 @@ impl ShellKind {
             cols: size.columns as u16,
         }
     }
+
+    fn title_from_program(self, program: &str) -> String {
+        #[cfg(target_family = "unix")]
+        {
+            if let Some(name) = Path::new(program)
+                .file_name()
+                .and_then(|name| name.to_str())
+                && !name.trim().is_empty()
+            {
+                return name.to_string();
+            }
+            "shell".to_string()
+        }
+
+        #[cfg(target_family = "windows")]
+        {
+            match self {
+                ShellKind::Cmd => "cmd".to_string(),
+                ShellKind::PowerShell => "powershell".to_string(),
+            }
+        }
+    }
+}
+
+#[cfg(target_family = "unix")]
+fn resolve_unix_shell() -> (String, Vec<String>) {
+    if let Ok(shell) = std::env::var("SHELL") {
+        let shell = shell.trim();
+        if !shell.is_empty() {
+            return (shell.to_string(), vec!["-i".to_string()]);
+        }
+    }
+
+    const FALLBACKS: &[&str] = &["zsh", "bash", "fish", "sh"];
+    if let Some(candidate) = FALLBACKS.iter().find(|candidate| command_exists(candidate)) {
+        return ((*candidate).to_string(), vec!["-i".to_string()]);
+    }
+
+    ("sh".to_string(), vec!["-i".to_string()])
+}
+
+#[cfg(target_family = "unix")]
+fn command_exists(program: &str) -> bool {
+    std::process::Command::new("sh")
+        .arg("-lc")
+        .arg(format!("command -v {program} >/dev/null 2>&1"))
+        .status()
+        .is_ok_and(|status| status.success())
 }
 
 impl Display for ShellKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             #[cfg(target_family = "unix")]
-            ShellKind::Zsh => write!(f, "zsh"),
+            ShellKind::Zsh => write!(f, "shell"),
             #[cfg(target_family = "windows")]
             ShellKind::Cmd => write!(f, "cmd"),
             #[cfg(target_family = "windows")]

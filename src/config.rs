@@ -543,8 +543,7 @@ impl From<&AppConfig> for FileConfig {
 }
 
 fn config_path() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    Some(home.join(".config").join("rabbitty").join("config.toml"))
+    Some(dirs::config_dir()?.join("rabbitty").join("config.toml"))
 }
 
 fn ensure_config_file(path: &Path) -> std::io::Result<()> {
@@ -634,4 +633,77 @@ fn default_cell_metrics() -> (f32, f32) {
     let cell_height = (DEFAULT_FONT_PX / FONT_SCALE_FACTOR).max(1.0);
     let cell_width = advance.max(1.0);
     (cell_width, cell_height)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_hex_color_accepts_valid_formats() {
+        assert_eq!(parse_hex_color("#aBcD09"), Some([0xab, 0xcd, 0x09]));
+        assert_eq!(parse_hex_color("0x112233"), Some([0x11, 0x22, 0x33]));
+        assert_eq!(parse_hex_color("445566"), Some([0x44, 0x55, 0x66]));
+    }
+
+    #[test]
+    fn parse_hex_color_rejects_invalid_values() {
+        assert_eq!(parse_hex_color("#12345"), None);
+        assert_eq!(parse_hex_color("#gg0011"), None);
+        assert_eq!(parse_hex_color(""), None);
+    }
+
+    #[test]
+    fn shortcut_normalization_handles_aliases_and_order() {
+        assert_eq!(
+            normalize_shortcut("control + shift + page-down"),
+            Some("Ctrl+Shift+PageDown".to_string())
+        );
+        assert_eq!(normalize_shortcut("meta+t"), Some("Command+T".to_string()));
+    }
+
+    #[test]
+    fn shortcut_normalization_rejects_invalid_tokens() {
+        assert_eq!(normalize_shortcut("Ctrl+"), None);
+        assert_eq!(normalize_shortcut("Ctrl+Tab+X"), None);
+        assert_eq!(normalize_shortcut("Shift+UnknownKey"), None);
+    }
+
+    #[test]
+    fn apply_updates_sanitizes_invalid_values() {
+        let mut config = AppConfig::default();
+        let original = config.clone();
+
+        config.apply_updates(AppConfigUpdates {
+            window_width: Some(-1.0),
+            window_height: Some(f32::NAN),
+            cell_width: Some(0.0),
+            cell_height: Some(f32::INFINITY),
+            background_opacity: Some(1.5),
+            macos_blur_alpha: Some(-0.5),
+            macos_blur_material: Some("invalid-material".to_string()),
+            shortcut_new_tab: Some("Ctrl+".to_string()),
+            shortcut_close_tab: Some("Ctrl+W".to_string()),
+            ..Default::default()
+        });
+
+        assert_eq!(config.ui.window_width, original.ui.window_width);
+        assert_eq!(config.ui.window_height, original.ui.window_height);
+        assert_eq!(config.terminal.cell_width, original.terminal.cell_width);
+        assert_eq!(config.terminal.cell_height, original.terminal.cell_height);
+        assert_eq!(
+            config.theme.background_opacity,
+            original.theme.background_opacity
+        );
+        assert_eq!(
+            config.theme.macos_blur_alpha,
+            original.theme.macos_blur_alpha
+        );
+        assert_eq!(
+            config.theme.macos_blur_material,
+            original.theme.macos_blur_material
+        );
+        assert_eq!(config.shortcuts.new_tab, original.shortcuts.new_tab);
+        assert_eq!(config.shortcuts.close_tab, "Ctrl+W");
+    }
 }

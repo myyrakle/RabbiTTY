@@ -82,7 +82,7 @@ struct CompositeVertex {
 
 #[derive(Debug)]
 struct OffscreenTarget {
-    texture: wgpu::Texture,
+    _texture: wgpu::Texture,
     view: wgpu::TextureView,
     size: [u32; 2],
 }
@@ -261,7 +261,7 @@ impl CompositePipeline {
         });
 
         self.offscreen = Some(OffscreenTarget {
-            texture,
+            _texture: texture,
             view,
             size,
         });
