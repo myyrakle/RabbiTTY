@@ -338,18 +338,20 @@ impl App {
 
                 let previous_width = self.config.ui.window_width;
                 let previous_height = self.config.ui.window_height;
-                let mut updates = AppConfigUpdates::default();
-                updates.window_width = Some(size.width);
-                updates.window_height = Some(size.height);
+                let updates = AppConfigUpdates {
+                    window_width: Some(size.width),
+                    window_height: Some(size.height),
+                    ..Default::default()
+                };
                 self.config.apply_updates(updates);
                 self.settings_draft
                     .sync_window_size(self.config.ui.window_width, self.config.ui.window_height);
                 if (self.config.ui.window_width - previous_width).abs() > f32::EPSILON
                     || (self.config.ui.window_height - previous_height).abs() > f32::EPSILON
                 {
-                    if let Err(err) = self.config.save() {
-                        eprintln!("Failed to save config: {err}");
-                    }
+                    self.config
+                        .save()
+                        .unwrap_or_else(|err| eprintln!("Failed to save config: {err}"));
                 }
 
                 let (cols, rows) = self.grid_for_size(size);

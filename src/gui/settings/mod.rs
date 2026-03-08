@@ -123,20 +123,22 @@ impl SettingsDraft {
     }
 
     pub fn to_updates(&self) -> AppConfigUpdates {
-        let mut updates = AppConfigUpdates::default();
-        updates.window_width = parse_f32(&self.window_width);
-        updates.window_height = parse_f32(&self.window_height);
-        updates.cell_width = parse_f32(&self.cell_width);
-        updates.cell_height = parse_f32(&self.cell_height);
-        updates.foreground = parse_hex_color(&self.foreground);
-        updates.background = parse_hex_color(&self.background);
-        updates.cursor = parse_hex_color(&self.cursor);
-        updates.background_opacity = parse_f32(&self.background_opacity);
-        updates.blur_enabled = Some(self.blur_enabled);
+        let mut updates = AppConfigUpdates {
+            window_width: parse_f32(&self.window_width),
+            window_height: parse_f32(&self.window_height),
+            cell_width: parse_f32(&self.cell_width),
+            cell_height: parse_f32(&self.cell_height),
+            foreground: parse_hex_color(&self.foreground),
+            background: parse_hex_color(&self.background),
+            cursor: parse_hex_color(&self.cursor),
+            background_opacity: parse_f32(&self.background_opacity),
+            blur_enabled: Some(self.blur_enabled),
+            macos_blur_alpha: parse_f32(&self.macos_blur_alpha),
+            ..Default::default()
+        };
         if !self.macos_blur_material.trim().is_empty() {
             updates.macos_blur_material = Some(self.macos_blur_material.clone());
         }
-        updates.macos_blur_alpha = parse_f32(&self.macos_blur_alpha);
         if !self.shortcut_new_tab.trim().is_empty() {
             updates.shortcut_new_tab = Some(self.shortcut_new_tab.clone());
         }
