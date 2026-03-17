@@ -28,6 +28,7 @@ struct GlyphInstance {
     uv_min: [f32; 2],
     uv_max: [f32; 2],
     color: [f32; 4],
+    bg_color: [f32; 4],
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -105,7 +106,7 @@ impl GlyphAtlas {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Unorm,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -139,6 +140,8 @@ pub(super) struct TextPipelineData {
     line_min_y: f32,
     cell_advance: f32,
     glyphs: HashMap<char, GlyphInfo>,
+    raster_buf: Vec<u8>,
+    filter_buf: Vec<u8>,
     glyph_instances: Vec<GlyphInstance>,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
@@ -250,6 +253,7 @@ impl TextPipelineData {
             push_constant_ranges: &[],
         });
 
+        // Single-pass subpixel: shader computes blending using known bg color
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("terminal.text.pipeline"),
             layout: Some(&pipeline_layout),
@@ -271,18 +275,19 @@ impl TextPipelineData {
                             2 => Float32x2,
                             3 => Float32x2,
                             4 => Float32x2,
-                            5 => Float32x4
+                            5 => Float32x4,
+                            6 => Float32x4
                         ],
                     },
                 ],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &module,
-                entry_point: Some("text_fs_main"),
+                entry_point: Some("text_fs_subpixel"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -329,6 +334,8 @@ impl TextPipelineData {
             line_min_y: 0.0,
             cell_advance: 0.0,
             glyphs: HashMap::new(),
+            raster_buf: Vec::new(),
+            filter_buf: Vec::new(),
             glyph_instances: Vec::new(),
             instance_buffer,
             instance_capacity: 64,
@@ -422,10 +429,7 @@ impl TextPipelineData {
             let cell_y = cell.row as f32 * cell_height;
             let origin_x = cell_x + offset_x;
             let origin_y = cell_y + top_margin - self.line_min_y;
-            let pos = [
-                (origin_x + info.bearing[0]).round(),
-                (origin_y + info.bearing[1]).round(),
-            ];
+            let pos = [origin_x + info.bearing[0], origin_y + info.bearing[1]];
 
             self.glyph_instances.push(GlyphInstance {
                 pos,
@@ -433,6 +437,7 @@ impl TextPipelineData {
                 uv_min: info.uv_min,
                 uv_max: info.uv_max,
                 color: cell.fg,
+                bg_color: cell.bg,
             });
         }
 
@@ -601,7 +606,13 @@ impl TextPipelineData {
         }
 
         let glyph_id = self.font.glyph_id(ch);
-        let glyph = glyph_id.with_scale_and_position(self.scale, point(0.0, self.ascent));
+
+        // Use 3x horizontal scale for subpixel rendering
+        let subpixel_scale = PxScale {
+            x: self.scale.x * 3.0,
+            y: self.scale.y,
+        };
+        let glyph = glyph_id.with_scale_and_position(subpixel_scale, point(0.0, self.ascent));
 
         let outlined = match self.font.outline_glyph(glyph) {
             Some(outlined) => outlined,
@@ -618,10 +629,11 @@ impl TextPipelineData {
         };
 
         let bounds = outlined.px_bounds();
-        let width = (bounds.max.x - bounds.min.x).ceil().max(0.0) as u32;
-        let height = (bounds.max.y - bounds.min.y).ceil().max(0.0) as u32;
+        let raster_width = (bounds.max.x - bounds.min.x).ceil().max(0.0) as u32;
+        let raster_height = (bounds.max.y - bounds.min.y).ceil().max(0.0) as u32;
+        let display_width = raster_width.div_ceil(3);
 
-        if width == 0 || height == 0 {
+        if display_width == 0 || raster_height == 0 {
             let info = GlyphInfo {
                 uv_min: [0.0, 0.0],
                 uv_max: [0.0, 0.0],
@@ -632,27 +644,69 @@ impl TextPipelineData {
             return Some(info);
         }
 
-        let pos = self.allocate_in_atlas(device, width, height)?;
+        let pos = self.allocate_in_atlas(device, display_width, raster_height)?;
         let origin_x = pos.0 + ATLAS_PADDING;
         let origin_y = pos.1 + ATLAS_PADDING;
 
-        let mut pixels = vec![0u8; (width * height) as usize];
+        // Rasterize at 3x horizontal resolution (reuse buffers)
+        let raster_len = (raster_width * raster_height) as usize;
+        self.raster_buf.clear();
+        self.raster_buf.resize(raster_len, 0);
         outlined.draw(|x, y, v| {
-            let idx = (y * width + x) as usize;
-            if let Some(slot) = pixels.get_mut(idx) {
+            let idx = (y * raster_width + x) as usize;
+            if let Some(slot) = self.raster_buf.get_mut(idx) {
                 *slot = (v * 255.0) as u8;
             }
         });
 
-        let bytes_per_row = width;
-        let padded_bytes_per_row = align_to(bytes_per_row, COPY_BYTES_PER_ROW_ALIGNMENT);
-        let mut padded = vec![0u8; (padded_bytes_per_row * height) as usize];
+        // Apply FreeType-style 5-tap LCD filter to reduce color fringing
+        const LCD_W: [u32; 5] = [16, 64, 112, 64, 16]; // sum = 272
+        self.filter_buf.clear();
+        self.filter_buf.resize(raster_len, 0);
+        let rw = raster_width as i32;
+        for row in 0..raster_height {
+            let base = (row * raster_width) as i32;
+            for x in 0..rw {
+                let mut acc: u32 = 0;
+                for (k, &w) in LCD_W.iter().enumerate() {
+                    let sx = x + k as i32 - 2;
+                    if sx >= 0 && sx < rw {
+                        acc += self.raster_buf[(base + sx) as usize] as u32 * w;
+                    }
+                }
+                self.filter_buf[(base + x) as usize] = (acc / 272).min(255) as u8;
+            }
+        }
 
-        for row in 0..height {
-            let src_start = (row * width) as usize;
-            let dst_start = (row * padded_bytes_per_row) as usize;
-            padded[dst_start..dst_start + width as usize]
-                .copy_from_slice(&pixels[src_start..src_start + width as usize]);
+        // Pack every 3 filtered samples into RGBA (R=left, G=center, B=right subpixel)
+        let rgba_row_bytes = display_width * 4;
+        let padded_bytes_per_row = align_to(rgba_row_bytes, COPY_BYTES_PER_ROW_ALIGNMENT);
+        let mut padded = vec![0u8; (padded_bytes_per_row * raster_height) as usize];
+
+        for row in 0..raster_height {
+            for col in 0..display_width {
+                let rx = col * 3;
+                let r = self
+                    .filter_buf
+                    .get((row * raster_width + rx) as usize)
+                    .copied()
+                    .unwrap_or(0);
+                let g = self
+                    .filter_buf
+                    .get((row * raster_width + rx + 1) as usize)
+                    .copied()
+                    .unwrap_or(0);
+                let b = self
+                    .filter_buf
+                    .get((row * raster_width + rx + 2) as usize)
+                    .copied()
+                    .unwrap_or(0);
+                let idx = (row * padded_bytes_per_row + col * 4) as usize;
+                padded[idx] = r;
+                padded[idx + 1] = g;
+                padded[idx + 2] = b;
+                padded[idx + 3] = r.max(g).max(b);
+            }
         }
 
         queue.write_texture(
@@ -670,11 +724,11 @@ impl TextPipelineData {
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(padded_bytes_per_row),
-                rows_per_image: Some(height),
+                rows_per_image: Some(raster_height),
             },
             wgpu::Extent3d {
-                width,
-                height,
+                width: display_width,
+                height: raster_height,
                 depth_or_array_layers: 1,
             },
         );
@@ -682,15 +736,15 @@ impl TextPipelineData {
         let atlas_size = self.atlas.size as f32;
         let uv_min = [origin_x as f32 / atlas_size, origin_y as f32 / atlas_size];
         let uv_max = [
-            (origin_x + width) as f32 / atlas_size,
-            (origin_y + height) as f32 / atlas_size,
+            (origin_x + display_width) as f32 / atlas_size,
+            (origin_y + raster_height) as f32 / atlas_size,
         ];
 
         let info = GlyphInfo {
             uv_min,
             uv_max,
-            size: [width as f32, height as f32],
-            bearing: [bounds.min.x, bounds.min.y],
+            size: [display_width as f32, raster_height as f32],
+            bearing: [bounds.min.x / 3.0, bounds.min.y],
         };
 
         self.glyphs.insert(ch, info);

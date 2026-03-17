@@ -154,21 +154,14 @@ impl App {
             Message::PtySenderReady(sender) => {
                 self.pty_sender = Some(sender);
             }
-            Message::PtyOutput(event) => match event {
-                OutputEvent::Data { tab_id, bytes } => {
-                    if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
-                        tab.feed_bytes(&bytes);
-                    }
+            Message::PtyOutput(event) => {
+                self.handle_pty_event(event);
+            }
+            Message::PtyOutputBatch(events) => {
+                for event in events {
+                    self.handle_pty_event(event);
                 }
-                OutputEvent::Closed { tab_id } => {
-                    if let Some(index) = self.tabs.iter().position(|t| t.id == tab_id) {
-                        self.tabs.remove(index);
-                        if self.active_tab >= self.tabs.len() && !self.tabs.is_empty() {
-                            self.active_tab = self.tabs.len() - 1;
-                        }
-                    }
-                }
-            },
+            }
             Message::KeyPressed {
                 key,
                 modifiers,
@@ -276,6 +269,24 @@ impl App {
         }
 
         Task::none()
+    }
+
+    fn handle_pty_event(&mut self, event: OutputEvent) {
+        match event {
+            OutputEvent::Data { tab_id, bytes } => {
+                if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
+                    tab.feed_bytes(&bytes);
+                }
+            }
+            OutputEvent::Closed { tab_id } => {
+                if let Some(index) = self.tabs.iter().position(|t| t.id == tab_id) {
+                    self.tabs.remove(index);
+                    if self.active_tab >= self.tabs.len() && !self.tabs.is_empty() {
+                        self.active_tab = self.tabs.len() - 1;
+                    }
+                }
+            }
+        }
     }
 
     fn apply_settings(&mut self, save: bool) -> Task<Message> {
@@ -484,8 +495,21 @@ impl App {
                     let (sender, mut receiver) = mpsc::channel(100);
                     let _ = output.send(Message::PtySenderReady(sender)).await;
 
-                    while let Some(event) = receiver.next().await {
-                        if output.send(Message::PtyOutput(event)).await.is_err() {
+                    while let Some(first) = receiver.next().await {
+                        let mut batch = vec![first];
+                        // Drain all pending events without blocking
+                        while let Ok(Some(event)) = receiver.try_next() {
+                            batch.push(event);
+                        }
+                        if batch.len() == 1 {
+                            if output
+                                .send(Message::PtyOutput(batch.pop().unwrap()))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        } else if output.send(Message::PtyOutputBatch(batch)).await.is_err() {
                             break;
                         }
                     }

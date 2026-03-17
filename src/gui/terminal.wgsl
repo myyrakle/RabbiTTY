@@ -59,12 +59,14 @@ struct TextVertexIn {
     @location(3) uv_min     : vec2<f32>,
     @location(4) uv_max     : vec2<f32>,
     @location(5) color      : vec4<f32>,
+    @location(6) bg_color   : vec4<f32>,
 };
 
 struct TextVertexOut {
     @builtin(position) position : vec4<f32>,
     @location(0) uv : vec2<f32>,
     @location(1) color : vec4<f32>,
+    @location(2) bg_color : vec4<f32>,
 };
 
 @vertex
@@ -80,14 +82,17 @@ fn text_vs_main(input : TextVertexIn) -> TextVertexOut {
     out.position = vec4<f32>(ndc, 0.0, 1.0);
     out.uv = uv;
     out.color = input.color;
+    out.bg_color = input.bg_color;
     return out;
 }
 
+// Single-pass subpixel: blend fg/bg per channel using known background color
 @fragment
-fn text_fs_main(input : TextVertexOut) -> @location(0) vec4<f32> {
-    let sample = textureSample(text_atlas, text_sampler, input.uv);
-    let alpha = sample.r;
-    return vec4<f32>(input.color.rgb * alpha, input.color.a * alpha);
+fn text_fs_subpixel(input : TextVertexOut) -> @location(0) vec4<f32> {
+    let cov = textureSample(text_atlas, text_sampler, input.uv);
+    let blended = input.bg_color.rgb * (1.0 - cov.rgb) + input.color.rgb * cov.rgb;
+    let alpha = max(cov.r, max(cov.g, cov.b));
+    return vec4<f32>(blended, mix(input.bg_color.a, input.color.a, alpha));
 }
 
 struct CompositeVertexIn {

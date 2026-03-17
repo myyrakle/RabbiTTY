@@ -313,8 +313,6 @@ impl TerminalEngine {
     }
 
     fn build_cells_into(&self, cells: &mut Vec<CellVisual>) {
-        cells.clear();
-
         let RenderableContent {
             display_iter,
             display_offset,
@@ -325,16 +323,25 @@ impl TerminalEngine {
 
         let default_fg = rgb_to_rgba(self.theme.foreground, 1.0);
         let default_bg = rgb_to_rgba(self.theme.background, self.theme.background_opacity);
+        let total = self.size.lines * self.size.columns;
+        let default_cell = CellVisual {
+            ch: ' ',
+            col: 0,
+            row: 0,
+            fg: default_fg,
+            bg: default_bg,
+            underline: false,
+        };
+
+        cells.clear();
+        cells.resize(total, default_cell);
+        // Stamp row/col in one pass
         for row in 0..self.size.lines {
+            let base = row * self.size.columns;
             for col in 0..self.size.columns {
-                cells.push(CellVisual {
-                    ch: ' ',
-                    col,
-                    row,
-                    fg: default_fg,
-                    bg: default_bg,
-                    underline: false,
-                });
+                let slot = &mut cells[base + col];
+                slot.col = col;
+                slot.row = row;
             }
         }
 

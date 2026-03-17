@@ -17,27 +17,6 @@ pub fn view<'a>(
         .find(|option| option.value == draft.terminal_font_selection)
         .cloned();
 
-    let terminal_section = section(
-        "Cells",
-        column(vec![
-            input_row_with_suffix(
-                "Cell width",
-                &draft.cell_width,
-                SettingsField::TerminalCellWidth,
-                "px",
-            ),
-            input_row_with_suffix(
-                "Cell height",
-                &draft.cell_height,
-                SettingsField::TerminalCellHeight,
-                "px",
-            ),
-        ])
-        .spacing(SPACING_NORMAL)
-        .width(Length::Fill)
-        .into(),
-    );
-
     let font_section = section(
         "Font",
         column(vec![
@@ -69,7 +48,7 @@ pub fn view<'a>(
         .into(),
     );
 
-    column(vec![terminal_section, font_section])
+    column(vec![font_section])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into()

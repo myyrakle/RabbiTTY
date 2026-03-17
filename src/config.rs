@@ -171,8 +171,6 @@ struct ShortcutsFileConfig {
 pub struct AppConfigUpdates {
     pub window_width: Option<f32>,
     pub window_height: Option<f32>,
-    pub cell_width: Option<f32>,
-    pub cell_height: Option<f32>,
     pub terminal_font_selection: Option<String>,
     pub terminal_font_size: Option<f32>,
     pub foreground: Option<[u8; 3]>,
@@ -247,17 +245,18 @@ impl AppConfig {
         if let Some(height) = updates.window_height {
             self.ui.window_height = sanitize_positive(height, self.ui.window_height);
         }
-        if let Some(width) = updates.cell_width {
-            self.terminal.cell_width = sanitize_positive(width, self.terminal.cell_width);
-        }
-        if let Some(height) = updates.cell_height {
-            self.terminal.cell_height = sanitize_positive(height, self.terminal.cell_height);
-        }
         if let Some(selection) = updates.terminal_font_selection {
             self.terminal.font_selection = sanitize_terminal_font_selection(&selection);
         }
         if let Some(size) = updates.terminal_font_size {
-            self.terminal.font_size = sanitize_terminal_font_size(size, self.terminal.font_size);
+            let new_size = sanitize_terminal_font_size(size, self.terminal.font_size);
+            if (new_size - self.terminal.font_size).abs() > 0.01 {
+                self.terminal.font_size = new_size;
+                // Recalculate cell dimensions to match new font size
+                let (cw, ch) = cell_metrics_for_font_size(new_size);
+                self.terminal.cell_width = cw;
+                self.terminal.cell_height = ch;
+            }
         }
         if let Some(foreground) = updates.foreground {
             self.theme.foreground = foreground;
@@ -328,18 +327,6 @@ impl AppConfig {
         }
 
         if let Some(term) = file.terminal {
-            let mut cell_width = self.terminal.cell_width;
-            let mut cell_height = self.terminal.cell_height;
-
-            if let Some(width) = term.cell_width {
-                cell_width = sanitize_positive(width, cell_width);
-            }
-            if let Some(height) = term.cell_height {
-                cell_height = sanitize_positive(height, cell_height);
-            }
-
-            self.terminal.cell_width = cell_width;
-            self.terminal.cell_height = cell_height;
             self.terminal.font_selection = term
                 .font_selection
                 .as_deref()
@@ -349,6 +336,11 @@ impl AppConfig {
                 self.terminal.font_size =
                     sanitize_terminal_font_size(size, self.terminal.font_size);
             }
+
+            // Cell dimensions always derived from font_size
+            let (cw, ch) = cell_metrics_for_font_size(self.terminal.font_size);
+            self.terminal.cell_width = cw;
+            self.terminal.cell_height = ch;
         }
 
         if let Some(theme) = file.theme {
@@ -610,8 +602,8 @@ impl From<&AppConfig> for FileConfig {
                 window_height: Some(config.ui.window_height),
             }),
             terminal: Some(TerminalFileConfig {
-                cell_width: Some(config.terminal.cell_width),
-                cell_height: Some(config.terminal.cell_height),
+                cell_width: None,
+                cell_height: None,
                 font_selection: config.terminal.font_selection.clone(),
                 legacy_font_path: None,
                 font_size: Some(config.terminal.font_size),
@@ -687,13 +679,10 @@ fn ensure_config_file(path: &Path) -> std::io::Result<()> {
 }
 
 fn default_config_toml() -> String {
-    let (cell_width, cell_height) = default_cell_metrics();
     format!(
-        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\ncell_width = {cell_width:.1}\ncell_height = {cell_height:.1}\nfont_selection = \"\"\nfont_size = {font_size:.1}\n\n[theme]\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_material = \"{macos_blur_material}\"\nmacos_blur_alpha = {macos_blur_alpha:.2}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\n",
+        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\nfont_selection = \"\"\nfont_size = {font_size:.1}\n\n[theme]\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_material = \"{macos_blur_material}\"\nmacos_blur_alpha = {macos_blur_alpha:.2}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\n",
         width = DEFAULT_WINDOW_WIDTH as u32,
         height = DEFAULT_WINDOW_HEIGHT as u32,
-        cell_width = cell_width,
-        cell_height = cell_height,
         font_size = DEFAULT_TERMINAL_FONT_SIZE,
         fg = DEFAULT_THEME_FOREGROUND[0],
         fg_g = DEFAULT_THEME_FOREGROUND[1],
@@ -717,9 +706,9 @@ fn default_config_toml() -> String {
     )
 }
 
-fn default_cell_metrics() -> (f32, f32) {
+pub fn cell_metrics_for_font_size(font_size: f32) -> (f32, f32) {
     let font = FontArc::try_from_slice(DEJAVU_SANS_MONO).expect("font load failed");
-    let scale = PxScale::from(DEFAULT_TERMINAL_FONT_SIZE);
+    let scale = PxScale::from(font_size);
     let scaled = font.as_scaled(scale);
     let ascent = scaled.ascent();
 
@@ -760,9 +749,13 @@ fn default_cell_metrics() -> (f32, f32) {
         advance = (line_height * 0.6).max(1.0);
     }
 
-    let cell_height = (DEFAULT_TERMINAL_FONT_SIZE / FONT_SCALE_FACTOR).max(1.0);
+    let cell_height = (font_size / FONT_SCALE_FACTOR).max(1.0);
     let cell_width = advance.max(1.0);
     (cell_width, cell_height)
+}
+
+fn default_cell_metrics() -> (f32, f32) {
+    cell_metrics_for_font_size(DEFAULT_TERMINAL_FONT_SIZE)
 }
 
 #[cfg(test)]
@@ -807,8 +800,6 @@ mod tests {
         config.apply_updates(AppConfigUpdates {
             window_width: Some(-1.0),
             window_height: Some(f32::NAN),
-            cell_width: Some(0.0),
-            cell_height: Some(f32::INFINITY),
             background_opacity: Some(1.5),
             macos_blur_alpha: Some(-0.5),
             macos_blur_material: Some("invalid-material".to_string()),
@@ -819,8 +810,6 @@ mod tests {
 
         assert_eq!(config.ui.window_width, original.ui.window_width);
         assert_eq!(config.ui.window_height, original.ui.window_height);
-        assert_eq!(config.terminal.cell_width, original.terminal.cell_width);
-        assert_eq!(config.terminal.cell_height, original.terminal.cell_height);
         assert_eq!(
             config.theme.background_opacity,
             original.theme.background_opacity

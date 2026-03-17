@@ -27,8 +27,6 @@ impl fmt::Display for TerminalFontOption {
 pub enum SettingsField {
     UiWindowWidth,
     UiWindowHeight,
-    TerminalCellWidth,
-    TerminalCellHeight,
     TerminalFontSelection,
     TerminalFontSize,
     ThemeForeground,
@@ -131,8 +129,6 @@ impl SshProfileDraft {
 pub struct SettingsDraft {
     pub window_width: String,
     pub window_height: String,
-    pub cell_width: String,
-    pub cell_height: String,
     pub terminal_font_selection: String,
     pub terminal_font_size: String,
     pub foreground: String,
@@ -156,8 +152,6 @@ impl SettingsDraft {
         Self {
             window_width: format!("{:.0}", config.ui.window_width),
             window_height: format!("{:.0}", config.ui.window_height),
-            cell_width: format!("{:.1}", config.terminal.cell_width),
-            cell_height: format!("{:.1}", config.terminal.cell_height),
             terminal_font_selection: config.terminal.font_selection.clone().unwrap_or_default(),
             terminal_font_size: format!("{:.1}", config.terminal.font_size),
             foreground: format_rgb(config.theme.foreground),
@@ -205,8 +199,6 @@ impl SettingsDraft {
         match field {
             SettingsField::UiWindowWidth => self.window_width = value,
             SettingsField::UiWindowHeight => self.window_height = value,
-            SettingsField::TerminalCellWidth => self.cell_width = value,
-            SettingsField::TerminalCellHeight => self.cell_height = value,
             SettingsField::TerminalFontSelection => self.terminal_font_selection = value,
             SettingsField::TerminalFontSize => self.terminal_font_size = value,
             SettingsField::ThemeForeground => self.foreground = value,
@@ -233,8 +225,6 @@ impl SettingsDraft {
         let mut updates = AppConfigUpdates {
             window_width: parse_f32(&self.window_width),
             window_height: parse_f32(&self.window_height),
-            cell_width: parse_f32(&self.cell_width),
-            cell_height: parse_f32(&self.cell_height),
             terminal_font_selection: Some(self.terminal_font_selection.clone()),
             terminal_font_size: parse_f32(&self.terminal_font_size),
             foreground: parse_hex_color(&self.foreground),

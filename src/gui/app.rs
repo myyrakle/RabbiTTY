@@ -42,6 +42,7 @@ pub enum Message {
     CancelRestartForBlur,
     PtySenderReady(mpsc::Sender<OutputEvent>),
     PtyOutput(OutputEvent),
+    PtyOutputBatch(Vec<OutputEvent>),
     KeyPressed {
         key: Key,
         modifiers: Modifiers,

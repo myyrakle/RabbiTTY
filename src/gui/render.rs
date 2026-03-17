@@ -65,6 +65,12 @@ pub struct TerminalPipeline {
     bg: BackgroundPipeline,
     text: TextPipelineData,
     composite: CompositePipeline,
+    last_cells_ptr: usize,
+    last_cells_len: usize,
+    last_cell_size: [f32; 2],
+    last_viewport: [f32; 2],
+    last_offset: [f32; 2],
+    last_font_size: f32,
 }
 
 impl Pipeline for TerminalPipeline {
@@ -73,6 +79,12 @@ impl Pipeline for TerminalPipeline {
             bg: BackgroundPipeline::new(device, format),
             text: TextPipelineData::new(device, format),
             composite: CompositePipeline::new(device, format),
+            last_cells_ptr: 0,
+            last_cells_len: 0,
+            last_cell_size: [0.0; 2],
+            last_viewport: [0.0; 2],
+            last_offset: [0.0; 2],
+            last_font_size: 0.0,
         }
     }
 }
@@ -328,12 +340,34 @@ impl Primitive for TerminalPrimitive {
         let cell_size = [self.cell_size[0] * scale, self.cell_size[1] * scale];
         let viewport = [self.viewport[0] * scale, self.viewport[1] * scale];
         let offset = [self.offset[0] * scale, self.offset[1] * scale];
+        let font_size = self.terminal_font_size * scale;
         let offscreen_size = [
             viewport[0].ceil().max(1.0) as u32,
             viewport[1].ceil().max(1.0) as u32,
         ];
 
         pipeline.composite.ensure_offscreen(device, offscreen_size);
+
+        // Check if anything actually changed since last prepare
+        let cells_ptr = Arc::as_ptr(&self.cells) as usize;
+        let cells_len = self.cells.len();
+        let unchanged = cells_ptr == pipeline.last_cells_ptr
+            && cells_len == pipeline.last_cells_len
+            && cell_size == pipeline.last_cell_size
+            && viewport == pipeline.last_viewport
+            && offset == pipeline.last_offset
+            && (font_size - pipeline.last_font_size).abs() < 0.01;
+
+        if unchanged {
+            return;
+        }
+
+        pipeline.last_cells_ptr = cells_ptr;
+        pipeline.last_cells_len = cells_len;
+        pipeline.last_cell_size = cell_size;
+        pipeline.last_viewport = viewport;
+        pipeline.last_offset = offset;
+        pipeline.last_font_size = font_size;
 
         {
             pipeline
@@ -348,9 +382,7 @@ impl Primitive for TerminalPrimitive {
             pipeline
                 .text
                 .apply_terminal_font_selection(device, self.terminal_font_selection.as_deref());
-            pipeline
-                .text
-                .set_requested_font_size(self.terminal_font_size);
+            pipeline.text.set_requested_font_size(font_size);
             pipeline.text.update_uniforms(queue, viewport, offset);
             pipeline
                 .text
