@@ -1,9 +1,11 @@
-use crate::config::FONT_SCALE_FACTOR;
+use crate::config::DEFAULT_TERMINAL_FONT_SIZE;
 use crate::terminal::CellVisual;
+use crate::terminal_font::load_system_font_by_family;
 use ab_glyph::{Font, FontArc, PxScale, ScaleFont, point};
 use bytemuck::{Pod, Zeroable};
 use iced::wgpu;
 use std::collections::HashMap;
+use std::fs;
 
 const DEJAVU_SANS_MONO: &[u8] = include_bytes!("../../../fonts/DejaVuSansMono.ttf");
 const ATLAS_INITIAL_SIZE: u32 = 2048;
@@ -26,6 +28,7 @@ struct GlyphInstance {
     uv_min: [f32; 2],
     uv_max: [f32; 2],
     color: [f32; 4],
+    bg_color: [f32; 4],
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -103,7 +106,7 @@ impl GlyphAtlas {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Unorm,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -130,16 +133,20 @@ pub(super) struct TextPipelineData {
     font: FontArc,
     scale: PxScale,
     font_px: f32,
+    requested_font_size: f32,
     ascent: f32,
     descent: f32,
     line_height: f32,
     line_min_y: f32,
     cell_advance: f32,
     glyphs: HashMap<char, GlyphInfo>,
+    raster_buf: Vec<u8>,
+    filter_buf: Vec<u8>,
     glyph_instances: Vec<GlyphInstance>,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     instance_len: usize,
+    requested_font_selection: Option<String>,
 }
 
 fn align_to(value: u32, alignment: u32) -> u32 {
@@ -246,6 +253,7 @@ impl TextPipelineData {
             push_constant_ranges: &[],
         });
 
+        // Single-pass subpixel: shader computes blending using known bg color
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("terminal.text.pipeline"),
             layout: Some(&pipeline_layout),
@@ -267,18 +275,19 @@ impl TextPipelineData {
                             2 => Float32x2,
                             3 => Float32x2,
                             4 => Float32x2,
-                            5 => Float32x4
+                            5 => Float32x4,
+                            6 => Float32x4
                         ],
                     },
                 ],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &module,
-                entry_point: Some("text_fs_main"),
+                entry_point: Some("text_fs_subpixel"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -318,16 +327,47 @@ impl TextPipelineData {
             font,
             scale,
             font_px: 0.0,
+            requested_font_size: DEFAULT_TERMINAL_FONT_SIZE,
             ascent: 0.0,
             descent: 0.0,
             line_height: 0.0,
             line_min_y: 0.0,
             cell_advance: 0.0,
             glyphs: HashMap::new(),
+            raster_buf: Vec::new(),
+            filter_buf: Vec::new(),
             glyph_instances: Vec::new(),
             instance_buffer,
             instance_capacity: 64,
             instance_len: 0,
+            requested_font_selection: None,
+        }
+    }
+
+    pub(super) fn apply_terminal_font_selection(
+        &mut self,
+        device: &wgpu::Device,
+        font_selection: Option<&str>,
+    ) {
+        let requested_font_selection = font_selection
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(ToOwned::to_owned);
+        if requested_font_selection == self.requested_font_selection {
+            return;
+        }
+        self.requested_font_selection = requested_font_selection.clone();
+
+        let next_font = requested_font_selection
+            .as_deref()
+            .and_then(load_font_from_selection)
+            .unwrap_or_else(default_terminal_font);
+        self.set_font(device, next_font);
+    }
+
+    pub(super) fn set_requested_font_size(&mut self, font_size: f32) {
+        if font_size.is_finite() && font_size > 0.0 {
+            self.requested_font_size = font_size;
         }
     }
 
@@ -351,7 +391,7 @@ impl TextPipelineData {
         let cell_width = cell_size[0];
         let cell_height = cell_size[1];
 
-        let mut font_px = (cell_height * FONT_SCALE_FACTOR).max(1.0);
+        let mut font_px = self.requested_font_size.max(1.0);
         self.ensure_font_size(font_px);
         if cell_width > 0.0 && self.cell_advance > cell_width {
             let scale = cell_width / self.cell_advance;
@@ -389,10 +429,7 @@ impl TextPipelineData {
             let cell_y = cell.row as f32 * cell_height;
             let origin_x = cell_x + offset_x;
             let origin_y = cell_y + top_margin - self.line_min_y;
-            let pos = [
-                (origin_x + info.bearing[0]).round(),
-                (origin_y + info.bearing[1]).round(),
-            ];
+            let pos = [origin_x + info.bearing[0], origin_y + info.bearing[1]];
 
             self.glyph_instances.push(GlyphInstance {
                 pos,
@@ -400,6 +437,7 @@ impl TextPipelineData {
                 uv_min: info.uv_min,
                 uv_max: info.uv_max,
                 color: cell.fg,
+                bg_color: cell.bg,
             });
         }
 
@@ -497,6 +535,19 @@ impl TextPipelineData {
         self.atlas.packer.reset(self.atlas.size);
     }
 
+    fn set_font(&mut self, device: &wgpu::Device, font: FontArc) {
+        self.font = font;
+        self.font_px = 0.0;
+        self.scale = PxScale::from(1.0);
+        self.ascent = 0.0;
+        self.descent = 0.0;
+        self.line_height = 0.0;
+        self.line_min_y = 0.0;
+        self.cell_advance = 0.0;
+        self.glyphs.clear();
+        self.rebuild_atlas(device, self.atlas.size);
+    }
+
     fn rebuild_atlas(&mut self, device: &wgpu::Device, size: u32) {
         let atlas = GlyphAtlas::new(device, size);
         self.atlas = atlas;
@@ -555,7 +606,13 @@ impl TextPipelineData {
         }
 
         let glyph_id = self.font.glyph_id(ch);
-        let glyph = glyph_id.with_scale_and_position(self.scale, point(0.0, self.ascent));
+
+        // Use 3x horizontal scale for subpixel rendering
+        let subpixel_scale = PxScale {
+            x: self.scale.x * 3.0,
+            y: self.scale.y,
+        };
+        let glyph = glyph_id.with_scale_and_position(subpixel_scale, point(0.0, self.ascent));
 
         let outlined = match self.font.outline_glyph(glyph) {
             Some(outlined) => outlined,
@@ -572,10 +629,11 @@ impl TextPipelineData {
         };
 
         let bounds = outlined.px_bounds();
-        let width = (bounds.max.x - bounds.min.x).ceil().max(0.0) as u32;
-        let height = (bounds.max.y - bounds.min.y).ceil().max(0.0) as u32;
+        let raster_width = (bounds.max.x - bounds.min.x).ceil().max(0.0) as u32;
+        let raster_height = (bounds.max.y - bounds.min.y).ceil().max(0.0) as u32;
+        let display_width = raster_width.div_ceil(3);
 
-        if width == 0 || height == 0 {
+        if display_width == 0 || raster_height == 0 {
             let info = GlyphInfo {
                 uv_min: [0.0, 0.0],
                 uv_max: [0.0, 0.0],
@@ -586,27 +644,69 @@ impl TextPipelineData {
             return Some(info);
         }
 
-        let pos = self.allocate_in_atlas(device, width, height)?;
+        let pos = self.allocate_in_atlas(device, display_width, raster_height)?;
         let origin_x = pos.0 + ATLAS_PADDING;
         let origin_y = pos.1 + ATLAS_PADDING;
 
-        let mut pixels = vec![0u8; (width * height) as usize];
+        // Rasterize at 3x horizontal resolution (reuse buffers)
+        let raster_len = (raster_width * raster_height) as usize;
+        self.raster_buf.clear();
+        self.raster_buf.resize(raster_len, 0);
         outlined.draw(|x, y, v| {
-            let idx = (y * width + x) as usize;
-            if let Some(slot) = pixels.get_mut(idx) {
+            let idx = (y * raster_width + x) as usize;
+            if let Some(slot) = self.raster_buf.get_mut(idx) {
                 *slot = (v * 255.0) as u8;
             }
         });
 
-        let bytes_per_row = width;
-        let padded_bytes_per_row = align_to(bytes_per_row, COPY_BYTES_PER_ROW_ALIGNMENT);
-        let mut padded = vec![0u8; (padded_bytes_per_row * height) as usize];
+        // Apply FreeType-style 5-tap LCD filter to reduce color fringing
+        const LCD_W: [u32; 5] = [16, 64, 112, 64, 16]; // sum = 272
+        self.filter_buf.clear();
+        self.filter_buf.resize(raster_len, 0);
+        let rw = raster_width as i32;
+        for row in 0..raster_height {
+            let base = (row * raster_width) as i32;
+            for x in 0..rw {
+                let mut acc: u32 = 0;
+                for (k, &w) in LCD_W.iter().enumerate() {
+                    let sx = x + k as i32 - 2;
+                    if sx >= 0 && sx < rw {
+                        acc += self.raster_buf[(base + sx) as usize] as u32 * w;
+                    }
+                }
+                self.filter_buf[(base + x) as usize] = (acc / 272).min(255) as u8;
+            }
+        }
 
-        for row in 0..height {
-            let src_start = (row * width) as usize;
-            let dst_start = (row * padded_bytes_per_row) as usize;
-            padded[dst_start..dst_start + width as usize]
-                .copy_from_slice(&pixels[src_start..src_start + width as usize]);
+        // Pack every 3 filtered samples into RGBA (R=left, G=center, B=right subpixel)
+        let rgba_row_bytes = display_width * 4;
+        let padded_bytes_per_row = align_to(rgba_row_bytes, COPY_BYTES_PER_ROW_ALIGNMENT);
+        let mut padded = vec![0u8; (padded_bytes_per_row * raster_height) as usize];
+
+        for row in 0..raster_height {
+            for col in 0..display_width {
+                let rx = col * 3;
+                let r = self
+                    .filter_buf
+                    .get((row * raster_width + rx) as usize)
+                    .copied()
+                    .unwrap_or(0);
+                let g = self
+                    .filter_buf
+                    .get((row * raster_width + rx + 1) as usize)
+                    .copied()
+                    .unwrap_or(0);
+                let b = self
+                    .filter_buf
+                    .get((row * raster_width + rx + 2) as usize)
+                    .copied()
+                    .unwrap_or(0);
+                let idx = (row * padded_bytes_per_row + col * 4) as usize;
+                padded[idx] = r;
+                padded[idx + 1] = g;
+                padded[idx + 2] = b;
+                padded[idx + 3] = r.max(g).max(b);
+            }
         }
 
         queue.write_texture(
@@ -624,11 +724,11 @@ impl TextPipelineData {
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(padded_bytes_per_row),
-                rows_per_image: Some(height),
+                rows_per_image: Some(raster_height),
             },
             wgpu::Extent3d {
-                width,
-                height,
+                width: display_width,
+                height: raster_height,
                 depth_or_array_layers: 1,
             },
         );
@@ -636,18 +736,31 @@ impl TextPipelineData {
         let atlas_size = self.atlas.size as f32;
         let uv_min = [origin_x as f32 / atlas_size, origin_y as f32 / atlas_size];
         let uv_max = [
-            (origin_x + width) as f32 / atlas_size,
-            (origin_y + height) as f32 / atlas_size,
+            (origin_x + display_width) as f32 / atlas_size,
+            (origin_y + raster_height) as f32 / atlas_size,
         ];
 
         let info = GlyphInfo {
             uv_min,
             uv_max,
-            size: [width as f32, height as f32],
-            bearing: [bounds.min.x, bounds.min.y],
+            size: [display_width as f32, raster_height as f32],
+            bearing: [bounds.min.x / 3.0, bounds.min.y],
         };
 
         self.glyphs.insert(ch, info);
         Some(info)
     }
+}
+
+fn default_terminal_font() -> FontArc {
+    FontArc::try_from_slice(DEJAVU_SANS_MONO).expect("font load failed")
+}
+
+fn load_font_from_path(path: &str) -> Option<FontArc> {
+    let bytes = fs::read(path).ok()?;
+    FontArc::try_from_vec(bytes).ok()
+}
+
+fn load_font_from_selection(selection: &str) -> Option<FontArc> {
+    load_system_font_by_family(selection).or_else(|| load_font_from_path(selection))
 }

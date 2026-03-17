@@ -1,9 +1,11 @@
+use crate::config::SshProfile;
 use crate::session::{LaunchSpec, OutputEvent, Session, SessionError};
 use crate::terminal::{CellVisual, TerminalEngine, TerminalSize, TerminalTheme};
 use iced::futures::channel::mpsc;
 use iced::keyboard::{Key, Modifiers, key::Named};
 use std::fmt::{Display, Formatter};
 use std::io::Write;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 pub struct TerminalTab {
@@ -42,7 +44,9 @@ impl TerminalTab {
         output_tx: mpsc::Sender<OutputEvent>,
     ) -> Self {
         let size = TerminalSize::new(columns, lines);
-        let (session, writer) = match Session::spawn(shell.launch_spec(size), id, output_tx) {
+        let launch_spec = shell.launch_spec(size);
+        let title = shell.title_from_program(&launch_spec.program);
+        let (session, writer) = match Session::spawn(launch_spec, id, output_tx) {
             Ok(session) => {
                 let writer = session.writer();
                 (TerminalSession::Active(session), writer)
@@ -57,7 +61,7 @@ impl TerminalTab {
 
         Self {
             id,
-            title: shell.to_string(),
+            title,
             shell,
             session,
             engine: TerminalEngine::new(size, 10_000, writer, theme),
@@ -174,7 +178,7 @@ impl TerminalTab {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum ShellKind {
     #[cfg(target_family = "unix")]
     Zsh,
@@ -182,17 +186,33 @@ pub enum ShellKind {
     Cmd,
     #[cfg(target_family = "windows")]
     PowerShell,
+    Ssh(SshProfile),
 }
 
 impl ShellKind {
-    fn launch_spec(self, size: TerminalSize) -> LaunchSpec<'static> {
-        let (program, args): (&str, &[&str]) = match self {
-            #[cfg(target_family = "unix")]
-            ShellKind::Zsh => ("zsh", &["-i"]),
-            #[cfg(target_family = "windows")]
-            ShellKind::Cmd => ("cmd", &["/Q", "/K"]),
-            #[cfg(target_family = "windows")]
-            ShellKind::PowerShell => ("powershell", &["-NoLogo", "-ExecutionPolicy", "Bypass"]),
+    fn launch_spec(&self, size: TerminalSize) -> LaunchSpec {
+        if let ShellKind::Ssh(profile) = self {
+            return profile.launch_spec(size);
+        }
+
+        #[cfg(target_family = "unix")]
+        let (program, args): (String, Vec<String>) = match self {
+            ShellKind::Zsh => resolve_unix_shell(),
+            ShellKind::Ssh(_) => unreachable!(),
+        };
+
+        #[cfg(target_family = "windows")]
+        let (program, args): (String, Vec<String>) = match self {
+            ShellKind::Cmd => ("cmd".to_string(), vec!["/Q".to_string(), "/K".to_string()]),
+            ShellKind::PowerShell => (
+                "powershell".to_string(),
+                vec![
+                    "-NoLogo".to_string(),
+                    "-ExecutionPolicy".to_string(),
+                    "Bypass".to_string(),
+                ],
+            ),
+            ShellKind::Ssh(_) => unreachable!(),
         };
 
         LaunchSpec {
@@ -202,17 +222,120 @@ impl ShellKind {
             cols: size.columns as u16,
         }
     }
+
+    fn title_from_program(&self, program: &str) -> String {
+        if let ShellKind::Ssh(profile) = self {
+            return profile.tab_title();
+        }
+
+        #[cfg(target_family = "unix")]
+        {
+            if let Some(name) = Path::new(program)
+                .file_name()
+                .and_then(|name| name.to_str())
+                && !name.trim().is_empty()
+            {
+                return name.to_string();
+            }
+            "shell".to_string()
+        }
+
+        #[cfg(target_family = "windows")]
+        {
+            match self {
+                ShellKind::Cmd => "cmd".to_string(),
+                ShellKind::PowerShell => "powershell".to_string(),
+                ShellKind::Ssh(_) => unreachable!(),
+            }
+        }
+    }
+}
+
+impl SshProfile {
+    fn launch_spec(&self, size: TerminalSize) -> LaunchSpec {
+        let mut args = Vec::new();
+
+        if self.port != 22 {
+            args.push("-p".to_string());
+            args.push(self.port.to_string());
+        }
+
+        if let Some(ref identity) = self.identity_file {
+            let expanded = if identity.starts_with("~/") {
+                dirs::home_dir()
+                    .map(|h| h.join(&identity[2..]).to_string_lossy().to_string())
+                    .unwrap_or_else(|| identity.clone())
+            } else {
+                identity.clone()
+            };
+            args.push("-i".to_string());
+            args.push(expanded);
+        }
+
+        let destination = if self.user.is_empty() {
+            self.host.clone()
+        } else {
+            format!("{}@{}", self.user, self.host)
+        };
+        args.push(destination);
+
+        LaunchSpec {
+            program: "ssh".to_string(),
+            args,
+            rows: size.lines as u16,
+            cols: size.columns as u16,
+        }
+    }
+
+    fn tab_title(&self) -> String {
+        if self.name.is_empty() {
+            if self.user.is_empty() {
+                self.host.clone()
+            } else {
+                format!("{}@{}", self.user, self.host)
+            }
+        } else {
+            self.name.clone()
+        }
+    }
+}
+
+#[cfg(target_family = "unix")]
+fn resolve_unix_shell() -> (String, Vec<String>) {
+    if let Ok(shell) = std::env::var("SHELL") {
+        let shell = shell.trim();
+        if !shell.is_empty() {
+            return (shell.to_string(), vec!["-i".to_string()]);
+        }
+    }
+
+    const FALLBACKS: &[&str] = &["zsh", "bash", "fish", "sh"];
+    if let Some(candidate) = FALLBACKS.iter().find(|candidate| command_exists(candidate)) {
+        return ((*candidate).to_string(), vec!["-i".to_string()]);
+    }
+
+    ("sh".to_string(), vec!["-i".to_string()])
+}
+
+#[cfg(target_family = "unix")]
+fn command_exists(program: &str) -> bool {
+    std::process::Command::new("sh")
+        .arg("-lc")
+        .arg(format!("command -v {program} >/dev/null 2>&1"))
+        .status()
+        .is_ok_and(|status| status.success())
 }
 
 impl Display for ShellKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             #[cfg(target_family = "unix")]
-            ShellKind::Zsh => write!(f, "zsh"),
+            ShellKind::Zsh => write!(f, "shell"),
             #[cfg(target_family = "windows")]
             ShellKind::Cmd => write!(f, "cmd"),
             #[cfg(target_family = "windows")]
             ShellKind::PowerShell => write!(f, "powershell"),
+            ShellKind::Ssh(profile) => write!(f, "ssh: {}", profile.tab_title()),
         }
     }
 }

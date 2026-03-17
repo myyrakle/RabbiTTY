@@ -44,8 +44,29 @@ pub const DEFAULT_SHORTCUT_QUIT: &str = "Command+Q";
 #[cfg(not(target_os = "macos"))]
 pub const DEFAULT_SHORTCUT_QUIT: &str = "Ctrl+Q";
 
-const DEFAULT_FONT_PX: f32 = 14.0;
+pub const DEFAULT_TERMINAL_FONT_SIZE: f32 = 14.0;
 const DEJAVU_SANS_MONO: &[u8] = include_bytes!("../fonts/DejaVuSansMono.ttf");
+
+#[derive(Debug, Clone)]
+pub struct SshProfile {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub identity_file: Option<String>,
+}
+
+impl Default for SshProfile {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            host: String::new(),
+            port: 22,
+            user: String::new(),
+            identity_file: None,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct AppConfig {
@@ -53,6 +74,7 @@ pub struct AppConfig {
     pub terminal: TerminalConfig,
     pub theme: ThemeConfig,
     pub shortcuts: ShortcutsConfig,
+    pub ssh_profiles: Vec<SshProfile>,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +87,8 @@ pub struct UiConfig {
 pub struct TerminalConfig {
     pub cell_width: f32,
     pub cell_height: f32,
+    pub font_selection: Option<String>,
+    pub font_size: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -89,11 +113,21 @@ pub struct ShortcutsConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+struct SshProfileFileConfig {
+    name: Option<String>,
+    host: Option<String>,
+    port: Option<u16>,
+    user: Option<String>,
+    identity_file: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 struct FileConfig {
     ui: Option<UiFileConfig>,
     terminal: Option<TerminalFileConfig>,
     theme: Option<ThemeFileConfig>,
     shortcuts: Option<ShortcutsFileConfig>,
+    ssh_profiles: Option<Vec<SshProfileFileConfig>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -106,6 +140,10 @@ struct UiFileConfig {
 struct TerminalFileConfig {
     cell_width: Option<f32>,
     cell_height: Option<f32>,
+    font_selection: Option<String>,
+    #[serde(alias = "font_path")]
+    legacy_font_path: Option<String>,
+    font_size: Option<f32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -133,8 +171,8 @@ struct ShortcutsFileConfig {
 pub struct AppConfigUpdates {
     pub window_width: Option<f32>,
     pub window_height: Option<f32>,
-    pub cell_width: Option<f32>,
-    pub cell_height: Option<f32>,
+    pub terminal_font_selection: Option<String>,
+    pub terminal_font_size: Option<f32>,
     pub foreground: Option<[u8; 3]>,
     pub background: Option<[u8; 3]>,
     pub cursor: Option<[u8; 3]>,
@@ -161,6 +199,8 @@ impl Default for AppConfig {
             terminal: TerminalConfig {
                 cell_width,
                 cell_height,
+                font_selection: None,
+                font_size: DEFAULT_TERMINAL_FONT_SIZE,
             },
             theme: ThemeConfig {
                 foreground: DEFAULT_THEME_FOREGROUND,
@@ -179,6 +219,7 @@ impl Default for AppConfig {
                 prev_tab: DEFAULT_SHORTCUT_PREV_TAB.to_string(),
                 quit: DEFAULT_SHORTCUT_QUIT.to_string(),
             },
+            ssh_profiles: vec![],
         }
     }
 }
@@ -204,11 +245,18 @@ impl AppConfig {
         if let Some(height) = updates.window_height {
             self.ui.window_height = sanitize_positive(height, self.ui.window_height);
         }
-        if let Some(width) = updates.cell_width {
-            self.terminal.cell_width = sanitize_positive(width, self.terminal.cell_width);
+        if let Some(selection) = updates.terminal_font_selection {
+            self.terminal.font_selection = sanitize_terminal_font_selection(&selection);
         }
-        if let Some(height) = updates.cell_height {
-            self.terminal.cell_height = sanitize_positive(height, self.terminal.cell_height);
+        if let Some(size) = updates.terminal_font_size {
+            let new_size = sanitize_terminal_font_size(size, self.terminal.font_size);
+            if (new_size - self.terminal.font_size).abs() > 0.01 {
+                self.terminal.font_size = new_size;
+                // Recalculate cell dimensions to match new font size
+                let (cw, ch) = cell_metrics_for_font_size(new_size);
+                self.terminal.cell_width = cw;
+                self.terminal.cell_height = ch;
+            }
         }
         if let Some(foreground) = updates.foreground {
             self.theme.foreground = foreground;
@@ -279,18 +327,20 @@ impl AppConfig {
         }
 
         if let Some(term) = file.terminal {
-            let mut cell_width = self.terminal.cell_width;
-            let mut cell_height = self.terminal.cell_height;
-
-            if let Some(width) = term.cell_width {
-                cell_width = sanitize_positive(width, cell_width);
+            self.terminal.font_selection = term
+                .font_selection
+                .as_deref()
+                .or(term.legacy_font_path.as_deref())
+                .and_then(sanitize_terminal_font_selection);
+            if let Some(size) = term.font_size {
+                self.terminal.font_size =
+                    sanitize_terminal_font_size(size, self.terminal.font_size);
             }
-            if let Some(height) = term.cell_height {
-                cell_height = sanitize_positive(height, cell_height);
-            }
 
-            self.terminal.cell_width = cell_width;
-            self.terminal.cell_height = cell_height;
+            // Cell dimensions always derived from font_size
+            let (cw, ch) = cell_metrics_for_font_size(self.terminal.font_size);
+            self.terminal.cell_width = cw;
+            self.terminal.cell_height = ch;
         }
 
         if let Some(theme) = file.theme {
@@ -340,6 +390,36 @@ impl AppConfig {
                 self.shortcuts.quit = sanitize_shortcut(value, &self.shortcuts.quit);
             }
         }
+
+        if let Some(profiles) = file.ssh_profiles {
+            self.ssh_profiles = profiles
+                .into_iter()
+                .filter_map(|p| {
+                    let host = p.host.as_deref().map(str::trim).unwrap_or("");
+                    if host.is_empty() {
+                        return None;
+                    }
+                    Some(SshProfile {
+                        name: p
+                            .name
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .unwrap_or(host)
+                            .to_string(),
+                        host: host.to_string(),
+                        port: p.port.unwrap_or(22),
+                        user: p.user.as_deref().map(str::trim).unwrap_or("").to_string(),
+                        identity_file: p
+                            .identity_file
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .map(String::from),
+                    })
+                })
+                .collect();
+        }
     }
 }
 
@@ -382,6 +462,23 @@ fn sanitize_macos_material(value: &str, fallback: &str) -> String {
 
 fn sanitize_shortcut(value: &str, fallback: &str) -> String {
     normalize_shortcut(value).unwrap_or_else(|| fallback.to_string())
+}
+
+fn sanitize_terminal_font_selection(value: &str) -> Option<String> {
+    let selection = value.trim();
+    if selection.is_empty() {
+        None
+    } else {
+        Some(selection.to_string())
+    }
+}
+
+fn sanitize_terminal_font_size(value: f32, fallback: f32) -> f32 {
+    if value.is_finite() && (6.0..=72.0).contains(&value) {
+        value
+    } else {
+        fallback
+    }
 }
 
 fn normalize_shortcut(value: &str) -> Option<String> {
@@ -505,8 +602,11 @@ impl From<&AppConfig> for FileConfig {
                 window_height: Some(config.ui.window_height),
             }),
             terminal: Some(TerminalFileConfig {
-                cell_width: Some(config.terminal.cell_width),
-                cell_height: Some(config.terminal.cell_height),
+                cell_width: None,
+                cell_height: None,
+                font_selection: config.terminal.font_selection.clone(),
+                legacy_font_path: None,
+                font_size: Some(config.terminal.font_size),
             }),
             theme: Some(ThemeFileConfig {
                 foreground: Some(format!(
@@ -538,13 +638,33 @@ impl From<&AppConfig> for FileConfig {
                 prev_tab: Some(config.shortcuts.prev_tab.clone()),
                 quit: Some(config.shortcuts.quit.clone()),
             }),
+            ssh_profiles: if config.ssh_profiles.is_empty() {
+                None
+            } else {
+                Some(
+                    config
+                        .ssh_profiles
+                        .iter()
+                        .map(|p| SshProfileFileConfig {
+                            name: Some(p.name.clone()),
+                            host: Some(p.host.clone()),
+                            port: Some(p.port),
+                            user: if p.user.is_empty() {
+                                None
+                            } else {
+                                Some(p.user.clone())
+                            },
+                            identity_file: p.identity_file.clone(),
+                        })
+                        .collect(),
+                )
+            },
         }
     }
 }
 
 fn config_path() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    Some(home.join(".config").join("rabbitty").join("config.toml"))
+    Some(dirs::config_dir()?.join("rabbitty").join("config.toml"))
 }
 
 fn ensure_config_file(path: &Path) -> std::io::Result<()> {
@@ -559,13 +679,11 @@ fn ensure_config_file(path: &Path) -> std::io::Result<()> {
 }
 
 fn default_config_toml() -> String {
-    let (cell_width, cell_height) = default_cell_metrics();
     format!(
-        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\ncell_width = {cell_width:.1}\ncell_height = {cell_height:.1}\n\n[theme]\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_material = \"{macos_blur_material}\"\nmacos_blur_alpha = {macos_blur_alpha:.2}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\n",
+        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\nfont_selection = \"\"\nfont_size = {font_size:.1}\n\n[theme]\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_material = \"{macos_blur_material}\"\nmacos_blur_alpha = {macos_blur_alpha:.2}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\n",
         width = DEFAULT_WINDOW_WIDTH as u32,
         height = DEFAULT_WINDOW_HEIGHT as u32,
-        cell_width = cell_width,
-        cell_height = cell_height,
+        font_size = DEFAULT_TERMINAL_FONT_SIZE,
         fg = DEFAULT_THEME_FOREGROUND[0],
         fg_g = DEFAULT_THEME_FOREGROUND[1],
         fg_b = DEFAULT_THEME_FOREGROUND[2],
@@ -588,9 +706,9 @@ fn default_config_toml() -> String {
     )
 }
 
-fn default_cell_metrics() -> (f32, f32) {
+pub fn cell_metrics_for_font_size(font_size: f32) -> (f32, f32) {
     let font = FontArc::try_from_slice(DEJAVU_SANS_MONO).expect("font load failed");
-    let scale = PxScale::from(DEFAULT_FONT_PX);
+    let scale = PxScale::from(font_size);
     let scaled = font.as_scaled(scale);
     let ascent = scaled.ascent();
 
@@ -631,7 +749,156 @@ fn default_cell_metrics() -> (f32, f32) {
         advance = (line_height * 0.6).max(1.0);
     }
 
-    let cell_height = (DEFAULT_FONT_PX / FONT_SCALE_FACTOR).max(1.0);
+    let cell_height = (font_size / FONT_SCALE_FACTOR).max(1.0);
     let cell_width = advance.max(1.0);
     (cell_width, cell_height)
+}
+
+fn default_cell_metrics() -> (f32, f32) {
+    cell_metrics_for_font_size(DEFAULT_TERMINAL_FONT_SIZE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_hex_color_accepts_valid_formats() {
+        assert_eq!(parse_hex_color("#aBcD09"), Some([0xab, 0xcd, 0x09]));
+        assert_eq!(parse_hex_color("0x112233"), Some([0x11, 0x22, 0x33]));
+        assert_eq!(parse_hex_color("445566"), Some([0x44, 0x55, 0x66]));
+    }
+
+    #[test]
+    fn parse_hex_color_rejects_invalid_values() {
+        assert_eq!(parse_hex_color("#12345"), None);
+        assert_eq!(parse_hex_color("#gg0011"), None);
+        assert_eq!(parse_hex_color(""), None);
+    }
+
+    #[test]
+    fn shortcut_normalization_handles_aliases_and_order() {
+        assert_eq!(
+            normalize_shortcut("control + shift + page-down"),
+            Some("Ctrl+Shift+PageDown".to_string())
+        );
+        assert_eq!(normalize_shortcut("meta+t"), Some("Command+T".to_string()));
+    }
+
+    #[test]
+    fn shortcut_normalization_rejects_invalid_tokens() {
+        assert_eq!(normalize_shortcut("Ctrl+"), None);
+        assert_eq!(normalize_shortcut("Ctrl+Tab+X"), None);
+        assert_eq!(normalize_shortcut("Shift+UnknownKey"), None);
+    }
+
+    #[test]
+    fn apply_updates_sanitizes_invalid_values() {
+        let mut config = AppConfig::default();
+        let original = config.clone();
+
+        config.apply_updates(AppConfigUpdates {
+            window_width: Some(-1.0),
+            window_height: Some(f32::NAN),
+            background_opacity: Some(1.5),
+            macos_blur_alpha: Some(-0.5),
+            macos_blur_material: Some("invalid-material".to_string()),
+            shortcut_new_tab: Some("Ctrl+".to_string()),
+            shortcut_close_tab: Some("Ctrl+W".to_string()),
+            ..Default::default()
+        });
+
+        assert_eq!(config.ui.window_width, original.ui.window_width);
+        assert_eq!(config.ui.window_height, original.ui.window_height);
+        assert_eq!(
+            config.theme.background_opacity,
+            original.theme.background_opacity
+        );
+        assert_eq!(
+            config.theme.macos_blur_alpha,
+            original.theme.macos_blur_alpha
+        );
+        assert_eq!(
+            config.theme.macos_blur_material,
+            original.theme.macos_blur_material
+        );
+        assert_eq!(config.shortcuts.new_tab, original.shortcuts.new_tab);
+        assert_eq!(config.shortcuts.close_tab, "Ctrl+W");
+    }
+
+    #[test]
+    fn apply_updates_terminal_font_selection_and_size_are_sanitized() {
+        let mut config = AppConfig::default();
+        let default_size = config.terminal.font_size;
+
+        config.apply_updates(AppConfigUpdates {
+            terminal_font_selection: Some(" Fira Code ".to_string()),
+            terminal_font_size: Some(18.5),
+            ..Default::default()
+        });
+        assert_eq!(
+            config.terminal.font_selection,
+            Some("Fira Code".to_string())
+        );
+        assert_eq!(config.terminal.font_size, 18.5);
+
+        config.apply_updates(AppConfigUpdates {
+            terminal_font_selection: Some("   ".to_string()),
+            terminal_font_size: Some(4.0),
+            ..Default::default()
+        });
+        assert_eq!(config.terminal.font_selection, None);
+        assert_eq!(config.terminal.font_size, 18.5);
+
+        config.apply_updates(AppConfigUpdates {
+            terminal_font_size: Some(f32::NAN),
+            ..Default::default()
+        });
+        assert_eq!(config.terminal.font_size, 18.5);
+
+        config.apply_updates(AppConfigUpdates {
+            terminal_font_size: Some(default_size),
+            ..Default::default()
+        });
+        assert_eq!(config.terminal.font_size, default_size);
+    }
+
+    #[test]
+    fn file_config_terminal_font_selection_supports_legacy_alias() {
+        let mut config = AppConfig::default();
+        let file = toml::from_str::<FileConfig>(
+            r#"
+            [terminal]
+            font_path = "  Legacy Font  "
+            font_size = 15.0
+            "#,
+        )
+        .expect("file config should parse");
+
+        config.apply_file(file);
+        assert_eq!(
+            config.terminal.font_selection,
+            Some("Legacy Font".to_string())
+        );
+        assert_eq!(config.terminal.font_size, 15.0);
+    }
+
+    #[test]
+    fn file_config_terminal_font_selection_prefers_new_key() {
+        let mut config = AppConfig::default();
+        let file = toml::from_str::<FileConfig>(
+            r#"
+            [terminal]
+            font_selection = " JetBrains Mono "
+            font_path = " Legacy Font "
+            "#,
+        )
+        .expect("file config should parse");
+
+        config.apply_file(file);
+        assert_eq!(
+            config.terminal.font_selection,
+            Some("JetBrains Mono".to_string())
+        );
+    }
 }

@@ -1,6 +1,4 @@
 use iced::futures::channel::mpsc;
-use iced::futures::executor;
-use iced::futures::sink::SinkExt;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use std::io::{ErrorKind, Read, Write};
 use std::sync::{Arc, Mutex};
@@ -8,9 +6,9 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-pub struct LaunchSpec<'a> {
-    pub program: &'a str,
-    pub args: &'a [&'a str],
+pub struct LaunchSpec {
+    pub program: String,
+    pub args: Vec<String>,
     pub rows: u16,
     pub cols: u16,
 }
@@ -36,7 +34,7 @@ pub enum OutputEvent {
 
 impl Session {
     pub fn spawn(
-        spec: LaunchSpec<'_>,
+        spec: LaunchSpec,
         tab_id: u64,
         mut output_tx: mpsc::Sender<OutputEvent>,
     ) -> Result<Self, SessionError> {
@@ -50,8 +48,8 @@ impl Session {
             })
             .map_err(|err| SessionError::Spawn(format!("openpty failed: {err}")))?;
 
-        let mut cmd = CommandBuilder::new(spec.program);
-        for arg in spec.args {
+        let mut cmd = CommandBuilder::new(&spec.program);
+        for arg in &spec.args {
             cmd.arg(arg);
         }
 
@@ -74,30 +72,26 @@ impl Session {
 
         let _writer_for_reader = Arc::clone(&writer);
         let reader_handle = thread::spawn(move || {
-            let mut buf = [0u8; 4096];
+            let mut buf = [0u8; 2048];
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => {
-                        let _ = executor::block_on(output_tx.send(OutputEvent::Closed { tab_id }));
+                        let _ = output_tx.try_send(OutputEvent::Closed { tab_id });
                         break;
                     }
                     Ok(n) => {
-                        let chunk = buf[..n].to_vec();
-                        if chunk.is_empty() {
-                            continue;
-                        }
-                        let _ = executor::block_on(output_tx.send(OutputEvent::Data {
+                        let _ = output_tx.try_send(OutputEvent::Data {
                             tab_id,
-                            bytes: chunk,
-                        }));
+                            bytes: buf[..n].to_vec(),
+                        });
                     }
                     Err(err) if err.kind() == ErrorKind::Interrupted => continue,
                     Err(err) if err.kind() == ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_millis(5));
+                        thread::sleep(Duration::from_millis(1));
                         continue;
                     }
                     Err(_) => {
-                        let _ = executor::block_on(output_tx.send(OutputEvent::Closed { tab_id }));
+                        let _ = output_tx.try_send(OutputEvent::Closed { tab_id });
                         break;
                     }
                 }
@@ -119,7 +113,6 @@ impl Session {
             .map_err(|err| SessionError::Io(format!("writer lock failed: {err}")))?;
         guard
             .write_all(bytes)
-            .and_then(|_| guard.flush())
             .map_err(|err| SessionError::Io(format!("write failed: {err}")))
     }
 
