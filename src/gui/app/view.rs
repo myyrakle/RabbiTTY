@@ -313,9 +313,10 @@ impl App {
 
         let breadcrumb = row![
             text("Settings").size(18),
-            text("/")
-                .size(16)
-                .color(Color { a: 0.3, ..palette.text }),
+            text("/").size(16).color(Color {
+                a: 0.3,
+                ..palette.text
+            }),
             text(self.settings_category.label())
                 .size(16)
                 .color(palette.accent),
