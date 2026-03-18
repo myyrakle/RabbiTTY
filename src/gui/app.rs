@@ -48,9 +48,14 @@ pub enum Message {
         modifiers: Modifiers,
         text: Option<String>,
     },
+
     TabBarScroll(f32),
+    TerminalScroll(f32), // relative Y from scrollbar (0.0 = top, 1.0 = bottom)
+    TerminalWheelScroll(i32), // line delta from mouse wheel
+
     WindowResized(Size),
     ApplyWindowStyle,
+
     #[cfg(target_os = "windows")]
     WindowMinimize,
     #[cfg(target_os = "windows")]
@@ -74,6 +79,7 @@ pub struct App {
     pty_sender: Option<mpsc::Sender<OutputEvent>>,
     next_tab_id: u64,
     tab_bar_scroll_offset: f32,
+    ignore_scrollable_sync: bool,
     window_style_applied: bool,
     #[cfg(target_os = "macos")]
     show_restart_confirm: bool,
@@ -101,6 +107,7 @@ impl App {
             pty_sender: None,
             next_tab_id: 1,
             tab_bar_scroll_offset: 0.0,
+            ignore_scrollable_sync: false,
             window_style_applied: false,
             #[cfg(target_os = "macos")]
             show_restart_confirm: false,

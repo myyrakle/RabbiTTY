@@ -1,6 +1,7 @@
 use crate::config::AppConfig;
 use alacritty_terminal::event::{Event, EventListener, WindowSize};
 use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::grid::Scroll;
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::color::Colors;
 use alacritty_terminal::term::{Config as TermConfig, RenderableContent, Term, point_to_viewport};
@@ -316,6 +317,34 @@ impl TerminalEngine {
         self.cells_cache.borrow().clone()
     }
 
+    pub fn scroll(&mut self, delta: i32) {
+        self.term.scroll_display(Scroll::Delta(delta));
+        self.cache_dirty.set(true);
+    }
+
+    /// Returns (display_offset, total_history_lines).
+    /// display_offset == 0 means at the bottom (latest output).
+    pub fn scroll_position(&self) -> (usize, usize) {
+        let offset = self.term.grid().display_offset();
+        let history = self.term.grid().history_size();
+        (offset, history)
+    }
+
+    /// Scroll to a relative position (0.0 = top of history, 1.0 = bottom/latest).
+    pub fn scroll_to_relative(&mut self, rel: f32) {
+        let history = self.term.grid().history_size();
+        if history == 0 {
+            return;
+        }
+        let target_offset = ((1.0 - rel.clamp(0.0, 1.0)) * history as f32).round() as usize;
+        let current = self.term.grid().display_offset();
+        let delta = target_offset as i32 - current as i32;
+        if delta != 0 {
+            self.term.scroll_display(Scroll::Delta(delta));
+            self.cache_dirty.set(true);
+        }
+    }
+
     pub fn set_theme(&mut self, theme: TerminalTheme) {
         self.theme = theme;
         self.cache_dirty.set(true);
@@ -400,7 +429,7 @@ impl TerminalEngine {
             }
         }
 
-        if cursor.shape != CursorShape::Hidden {
+        if cursor.shape != CursorShape::Hidden && display_offset == 0 {
             let cursor_col = cursor.point.column.0;
             let cursor_line = cursor.point.line.0 as usize;
 

@@ -19,6 +19,8 @@ use super::shortcuts::ShortcutAction;
 
 pub(in crate::gui) static TAB_BAR_SCROLLABLE_ID: LazyLock<widget::Id> =
     LazyLock::new(widget::Id::unique);
+pub(in crate::gui) static TERMINAL_SCROLLABLE_ID: LazyLock<widget::Id> =
+    LazyLock::new(widget::Id::unique);
 
 impl App {
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -163,11 +165,15 @@ impl App {
             }
             Message::PtyOutput(event) => {
                 self.handle_pty_event(event);
+                self.ignore_scrollable_sync = true;
+                return self.sync_terminal_scrollable();
             }
             Message::PtyOutputBatch(events) => {
                 for event in events {
                     self.handle_pty_event(event);
                 }
+                self.ignore_scrollable_sync = true;
+                return self.sync_terminal_scrollable();
             }
             Message::KeyPressed {
                 key,
@@ -204,6 +210,8 @@ impl App {
                 if let Some(tab) = self.tabs.get_mut(self.active_tab) {
                     tab.handle_key(&key, modifiers, text.as_deref());
                 }
+                self.ignore_scrollable_sync = true;
+                return self.sync_terminal_scrollable();
             }
             Message::Exit => {
                 return iced::exit();
@@ -262,6 +270,24 @@ impl App {
                     },
                 );
             }
+            Message::TerminalScroll(rel_y) => {
+                if self.ignore_scrollable_sync {
+                    self.ignore_scrollable_sync = false;
+                } else if self.active_tab != SETTINGS_TAB_INDEX
+                    && let Some(tab) = self.tabs.get_mut(self.active_tab)
+                {
+                    tab.scroll_to_relative(rel_y);
+                }
+            }
+            Message::TerminalWheelScroll(delta) => {
+                if self.active_tab != SETTINGS_TAB_INDEX
+                    && let Some(tab) = self.tabs.get_mut(self.active_tab)
+                {
+                    tab.scroll(delta);
+                }
+                self.ignore_scrollable_sync = true;
+                return self.sync_terminal_scrollable_forced();
+            }
             Message::WindowResized(size) => {
                 self.window_size = size;
 
@@ -309,6 +335,55 @@ impl App {
                 }
             }
         }
+    }
+
+    fn sync_terminal_scrollable_forced(&self) -> Task<Message> {
+        if self.active_tab == SETTINGS_TAB_INDEX {
+            return Task::none();
+        }
+        let Some(tab) = self.tabs.get(self.active_tab) else {
+            return Task::none();
+        };
+        let (offset, history) = tab.scroll_position();
+        if history == 0 {
+            return Task::none();
+        }
+        let rel_y = 1.0 - (offset as f32 / history as f32).clamp(0.0, 1.0);
+        let content_height = history as f32 * self.config.terminal.cell_height.max(1.0);
+        scroll_to(
+            TERMINAL_SCROLLABLE_ID.clone(),
+            scrollable::AbsoluteOffset {
+                x: 0.0,
+                y: rel_y * content_height,
+            },
+        )
+    }
+
+    fn sync_terminal_scrollable(&self) -> Task<Message> {
+        if self.active_tab == SETTINGS_TAB_INDEX {
+            return Task::none();
+        }
+        let Some(tab) = self.tabs.get(self.active_tab) else {
+            return Task::none();
+        };
+        let (offset, history) = tab.scroll_position();
+        if history == 0 {
+            return Task::none();
+        }
+        // Only sync when at the bottom to avoid feedback loops
+        // when user has scrolled up manually
+        if offset > 0 {
+            return Task::none();
+        }
+        // Scroll the iced scrollable to the very bottom
+        let content_height = history as f32 * self.config.terminal.cell_height.max(1.0);
+        scroll_to(
+            TERMINAL_SCROLLABLE_ID.clone(),
+            scrollable::AbsoluteOffset {
+                x: 0.0,
+                y: content_height,
+            },
+        )
     }
 
     fn apply_settings(&mut self, save: bool) -> Task<Message> {
@@ -551,12 +626,15 @@ impl App {
                     text: text.map(|s| s.to_string()),
                 }),
                 Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                    let pixels = match delta {
-                        mouse::ScrollDelta::Lines { x, y } => x * 30.0 - y * 30.0,
-                        mouse::ScrollDelta::Pixels { x, y } => x - y,
+                    let (lines_y, pixels_x) = match delta {
+                        mouse::ScrollDelta::Lines { x, y } => (y, x * 30.0),
+                        mouse::ScrollDelta::Pixels { x, y } => (y / 20.0, x),
                     };
-                    if pixels.abs() > 0.1 {
-                        Some(Message::TabBarScroll(pixels))
+                    let line_delta = lines_y.round() as i32;
+                    if line_delta != 0 {
+                        Some(Message::TerminalWheelScroll(line_delta))
+                    } else if pixels_x.abs() > 0.1 {
+                        Some(Message::TabBarScroll(pixels_x))
                     } else {
                         None
                     }

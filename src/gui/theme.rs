@@ -1,6 +1,7 @@
 #![allow(unused)]
 
-use iced::{Color, color};
+use iced::widget::{container, scrollable};
+use iced::{Background, Border, Color, Shadow, color};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Palette {
@@ -31,3 +32,47 @@ pub const SPACING_LARGE: f32 = 16.0;
 
 pub const RADIUS_SMALL: f32 = 4.0;
 pub const RADIUS_NORMAL: f32 = 8.0;
+
+pub fn scrollbar_style(_theme: &iced::Theme, status: scrollable::Status) -> scrollable::Style {
+    let palette = Palette::DARK;
+    let scroller_alpha = match status {
+        scrollable::Status::Active { .. } => 0.3,
+        scrollable::Status::Hovered { .. } => 0.5,
+        scrollable::Status::Dragged { .. } => 0.7,
+    };
+
+    let rail = |visible: bool| scrollable::Rail {
+        background: Some(Background::Color(if visible {
+            Color {
+                a: 0.08,
+                ..palette.surface
+            }
+        } else {
+            Color::TRANSPARENT
+        })),
+        border: Border::default(),
+        scroller: scrollable::Scroller {
+            background: Background::Color(Color {
+                a: if visible { scroller_alpha } else { 0.0 },
+                ..palette.text_secondary
+            }),
+            border: Border {
+                radius: RADIUS_SMALL.into(),
+                ..Default::default()
+            },
+        },
+    };
+
+    scrollable::Style {
+        container: container::Style::default(),
+        vertical_rail: rail(true),
+        horizontal_rail: rail(true),
+        gap: None,
+        auto_scroll: scrollable::AutoScroll {
+            background: Background::Color(Color::TRANSPARENT),
+            border: Border::default(),
+            shadow: Shadow::default(),
+            icon: Color::TRANSPARENT,
+        },
+    }
+}

@@ -67,7 +67,39 @@ impl App {
             .width(Length::Fill)
             .height(Length::Fill);
 
-            terminal_widget.into()
+            let (_scroll_offset, scroll_history) = active_tab.scroll_position();
+            if scroll_history > 0 {
+                // Total content height = (history + visible lines) * cell_height
+                let cell_height = self.config.terminal.cell_height.max(1.0);
+                let content_height = (scroll_history + dims.lines) as f32 * cell_height;
+                // Invisible tall content inside scrollable for native scrollbar
+                let scroll_content = container("")
+                    .width(Length::Fill)
+                    .height(Length::Fixed(content_height));
+
+                let scroll_overlay = scrollable(scroll_content)
+                    .id(crate::gui::app::update::TERMINAL_SCROLLABLE_ID.clone())
+                    .direction(scrollable::Direction::Vertical(
+                        scrollable::Scrollbar::new().width(8).scroller_width(8),
+                    ))
+                    .on_scroll(|viewport: scrollable::Viewport| {
+                        let rel = viewport.relative_offset();
+                        Message::TerminalScroll(rel.y)
+                    })
+                    .style(crate::gui::theme::scrollbar_style)
+                    .width(Length::Fixed(14.0))
+                    .height(Length::Fill);
+
+                stack![
+                    terminal_widget,
+                    row![container("").width(Length::Fill), scroll_overlay].height(Length::Fill)
+                ]
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+            } else {
+                terminal_widget.into()
+            }
         } else {
             column(vec![
                 text("No tabs open").size(20).into(),

@@ -50,6 +50,7 @@ pub fn tab_bar<'a>(
             vertical: scrollable::Scrollbar::new().width(0).scroller_width(0),
             horizontal: scrollable::Scrollbar::new().width(3).scroller_width(3),
         })
+        .style(crate::gui::theme::scrollbar_style)
         .width(Length::Fill)
         .height(Length::Shrink);
 

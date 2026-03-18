@@ -103,6 +103,19 @@ impl TerminalTab {
         }
     }
 
+    pub fn scroll(&mut self, delta: i32) {
+        self.engine.scroll(delta);
+    }
+
+    /// Returns (display_offset, total_history_lines).
+    pub fn scroll_position(&self) -> (usize, usize) {
+        self.engine.scroll_position()
+    }
+
+    pub fn scroll_to_relative(&mut self, rel: f32) {
+        self.engine.scroll_to_relative(rel);
+    }
+
     pub fn resize(&mut self, columns: usize, lines: usize) {
         let new_size = TerminalSize::new(columns, lines);
         self.engine.resize(new_size);
