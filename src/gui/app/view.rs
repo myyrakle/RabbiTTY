@@ -291,52 +291,47 @@ impl App {
 
         for category in SettingsCategory::ALL {
             let is_active = category == self.settings_category;
+            let icon = category.icon();
             let label = category.label();
             let button_style = move |_theme: &iced::Theme, status: iced::widget::button::Status| {
-                let base_bg = if is_active {
+                let bg = if is_active {
                     Color {
-                        a: 0.35,
-                        ..palette.background
+                        a: 0.15,
+                        ..palette.accent
                     }
                 } else {
-                    Color::TRANSPARENT
-                };
-                let hover_bg = if is_active {
-                    base_bg
-                } else {
-                    Color {
-                        a: 0.2,
-                        ..palette.background
+                    match status {
+                        iced::widget::button::Status::Hovered => Color {
+                            a: 0.1,
+                            ..palette.text
+                        },
+                        _ => Color::TRANSPARENT,
                     }
-                };
-
-                let background = match status {
-                    iced::widget::button::Status::Hovered => hover_bg,
-                    _ => base_bg,
                 };
 
                 iced::widget::button::Style {
-                    background: Some(Background::Color(background)),
+                    background: Some(Background::Color(bg)),
                     text_color: if is_active {
-                        palette.text
+                        palette.accent
                     } else {
                         palette.text_secondary
                     },
                     border: Border {
                         radius: RADIUS_NORMAL.into(),
-                        width: if is_active { 1.0 } else { 0.0 },
-                        color: Color {
-                            a: 0.15,
-                            ..palette.text
-                        },
+                        width: 0.0,
+                        color: Color::TRANSPARENT,
                     },
                     shadow: iced::Shadow::default(),
                     snap: true,
                 }
             };
 
-            let item = button(text(label).size(13))
-                .padding([6, 10])
+            let btn_content = row![text(icon).size(14), text(label).size(13),]
+                .spacing(SPACING_SMALL)
+                .align_y(iced::Alignment::Center);
+
+            let item = button(btn_content)
+                .padding([8, 12])
                 .width(Length::Fill)
                 .on_press(Message::SelectSettingsCategory(category))
                 .style(button_style);

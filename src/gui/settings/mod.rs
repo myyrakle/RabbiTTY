@@ -83,6 +83,16 @@ impl SettingsCategory {
             Self::Ssh => "SSH",
         }
     }
+
+    pub fn icon(self) -> &'static str {
+        match self {
+            Self::Ui => "◫",
+            Self::Terminal => "▣",
+            Self::Theme => "◑",
+            Self::Shortcuts => "⌘",
+            Self::Ssh => "⇄",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
