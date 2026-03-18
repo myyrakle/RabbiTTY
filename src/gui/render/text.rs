@@ -1,6 +1,6 @@
 use crate::config::DEFAULT_TERMINAL_FONT_SIZE;
 use crate::terminal::CellVisual;
-use crate::terminal_font::load_system_font_by_family;
+use crate::terminal_font::{load_cjk_fallback_font, load_system_font_by_family};
 use ab_glyph::{Font, FontArc, PxScale, ScaleFont, point};
 use bytemuck::{Pod, Zeroable};
 use iced::wgpu;
@@ -139,6 +139,7 @@ pub(super) struct TextPipelineData {
     line_height: f32,
     line_min_y: f32,
     cell_advance: f32,
+    fallback_font: Option<FontArc>,
     glyphs: HashMap<char, GlyphInfo>,
     raster_buf: Vec<u8>,
     filter_buf: Vec<u8>,
@@ -307,6 +308,7 @@ impl TextPipelineData {
         });
 
         let font = FontArc::try_from_slice(DEJAVU_SANS_MONO).expect("font load failed");
+        let fallback_font = load_cjk_fallback_font();
         let scale = PxScale::from(1.0);
 
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -325,6 +327,7 @@ impl TextPipelineData {
             sampler,
             atlas,
             font,
+            fallback_font,
             scale,
             font_px: 0.0,
             requested_font_size: DEFAULT_TERMINAL_FONT_SIZE,
@@ -608,14 +611,41 @@ impl TextPipelineData {
 
         let glyph_id = self.font.glyph_id(ch);
 
+        let use_fallback = glyph_id.0 == 0 && self.fallback_font.is_some();
+        let active_font: &FontArc = if use_fallback {
+            self.fallback_font.as_ref().unwrap()
+        } else {
+            &self.font
+        };
+
+        let resolved_glyph_id = if use_fallback {
+            active_font.glyph_id(ch)
+        } else {
+            glyph_id
+        };
+
+        // If still missing in fallback, render as empty
+        if resolved_glyph_id.0 == 0 {
+            let info = GlyphInfo {
+                uv_min: [0.0, 0.0],
+                uv_max: [0.0, 0.0],
+                size: [0.0, 0.0],
+                bearing: [0.0, 0.0],
+            };
+            self.glyphs.insert(ch, info);
+            return Some(info);
+        }
+
         // Use 3x horizontal scale for subpixel rendering
         let subpixel_scale = PxScale {
             x: self.scale.x * 3.0,
             y: self.scale.y,
         };
-        let glyph = glyph_id.with_scale_and_position(subpixel_scale, point(0.0, self.ascent));
+        let active_ascent = active_font.as_scaled(self.scale).ascent();
+        let glyph =
+            resolved_glyph_id.with_scale_and_position(subpixel_scale, point(0.0, active_ascent));
 
-        let outlined = match self.font.outline_glyph(glyph) {
+        let outlined = match active_font.outline_glyph(glyph) {
             Some(outlined) => outlined,
             None => {
                 let info = GlyphInfo {
@@ -685,23 +715,21 @@ impl TextPipelineData {
         let mut padded = vec![0u8; (padded_bytes_per_row * raster_height) as usize];
 
         for row in 0..raster_height {
+            let row_start = (row * raster_width) as usize;
+            let row_end = row_start + raster_width as usize;
             for col in 0..display_width {
-                let rx = col * 3;
-                let r = self
-                    .filter_buf
-                    .get((row * raster_width + rx) as usize)
-                    .copied()
-                    .unwrap_or(0);
-                let g = self
-                    .filter_buf
-                    .get((row * raster_width + rx + 1) as usize)
-                    .copied()
-                    .unwrap_or(0);
-                let b = self
-                    .filter_buf
-                    .get((row * raster_width + rx + 2) as usize)
-                    .copied()
-                    .unwrap_or(0);
+                let rx = row_start + (col * 3) as usize;
+                let r = if rx < row_end { self.filter_buf[rx] } else { 0 };
+                let g = if rx + 1 < row_end {
+                    self.filter_buf[rx + 1]
+                } else {
+                    0
+                };
+                let b = if rx + 2 < row_end {
+                    self.filter_buf[rx + 2]
+                } else {
+                    0
+                };
                 let idx = (row * padded_bytes_per_row + col * 4) as usize;
                 padded[idx] = r;
                 padded[idx + 1] = g;
