@@ -72,17 +72,11 @@ impl App {
     }
 
     pub(super) fn handle_tab_bar_scroll(&mut self, delta: f32) -> Task<Message> {
-        let tab_count = self.tabs.len() + if self.settings_open { 1 } else { 0 };
-        let max_offset = (tab_count as f32 * 150.0).max(0.0);
-
-        self.tab_bar_scroll_offset = (self.tab_bar_scroll_offset + delta).clamp(0.0, max_offset);
-
+        let new_x = (self.tab_bar_scroll_x - delta).max(0.0);
+        self.tab_bar_scroll_x = new_x;
         scroll_to(
             TAB_BAR_SCROLLABLE_ID.clone(),
-            scrollable::AbsoluteOffset {
-                x: self.tab_bar_scroll_offset,
-                y: 0.0,
-            },
+            scrollable::AbsoluteOffset { x: new_x, y: 0.0 },
         )
     }
 

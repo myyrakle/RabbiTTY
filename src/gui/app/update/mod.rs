@@ -132,6 +132,9 @@ impl App {
             Message::TabBarScroll(delta) => {
                 return self.handle_tab_bar_scroll(delta);
             }
+            Message::TabBarScrolled(x) => {
+                self.tab_bar_scroll_x = x;
+            }
             Message::TerminalScroll(rel_y) => {
                 if self.ignore_scrollable_sync {
                     self.ignore_scrollable_sync = false;

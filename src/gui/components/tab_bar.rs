@@ -46,9 +46,11 @@ pub fn tab_bar<'a>(
         .align_y(iced::Alignment::Center);
     let tabs_scroll = scrollable(tabs_row)
         .id(crate::gui::app::update::TAB_BAR_SCROLLABLE_ID.clone())
-        .direction(scrollable::Direction::Both {
-            vertical: scrollable::Scrollbar::new().width(0).scroller_width(0),
-            horizontal: scrollable::Scrollbar::new().width(3).scroller_width(3),
+        .direction(scrollable::Direction::Horizontal(
+            scrollable::Scrollbar::new().width(3).scroller_width(3),
+        ))
+        .on_scroll(|viewport: scrollable::Viewport| {
+            Message::TabBarScrolled(viewport.absolute_offset().x)
         })
         .style(crate::gui::theme::scrollbar_style)
         .width(Length::Fill)
