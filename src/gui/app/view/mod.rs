@@ -118,6 +118,7 @@ impl App {
                 self.config.terminal.padding_y,
             ],
             clear_color,
+            selection: active_tab.selection,
         }
         .widget()
         .width(Length::Fill)

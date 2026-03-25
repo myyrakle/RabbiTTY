@@ -49,6 +49,8 @@ pub enum Message {
 
     TabBarScroll(f32),
     TabBarScrolled(f32),
+    SelectionChanged(Option<crate::terminal::Selection>),
+    PasteClipboard(String),
     TerminalScroll(f32),
     TerminalWheelScroll(i32),
 

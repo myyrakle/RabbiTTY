@@ -1,6 +1,6 @@
 use crate::config::SshProfile;
 use crate::session::{LaunchSpec, OutputEvent, Session, SessionError};
-use crate::terminal::{CellVisual, TerminalEngine, TerminalSize, TerminalTheme};
+use crate::terminal::{CellVisual, Selection, TerminalEngine, TerminalSize, TerminalTheme};
 use iced::futures::channel::mpsc;
 use iced::keyboard::{Key, Modifiers, key::Named};
 use std::fmt::{Display, Formatter};
@@ -14,6 +14,7 @@ pub struct TerminalTab {
     #[allow(dead_code)]
     pub shell: ShellKind,
     pub session: TerminalSession,
+    pub selection: Option<Selection>,
     engine: TerminalEngine,
 }
 
@@ -64,6 +65,7 @@ impl TerminalTab {
             title,
             shell,
             session,
+            selection: None,
             engine: TerminalEngine::new(size, 10_000, writer, theme),
         }
     }
@@ -107,6 +109,44 @@ impl TerminalTab {
     /// Returns (display_offset, total_history_lines).
     pub fn scroll_position(&self) -> (usize, usize) {
         self.engine.scroll_position()
+    }
+
+    pub fn selected_text(&self) -> Option<String> {
+        let sel = self.selection.as_ref().filter(|s| !s.is_empty())?;
+        let cells = self.engine.render_cells();
+        let size = self.engine.size();
+        let (start, end) = sel.ordered();
+        let mut result = String::new();
+        for row in start.row..=end.row {
+            let col_start = if row == start.row { start.col } else { 0 };
+            let col_end = if row == end.row {
+                end.col
+            } else {
+                size.columns.saturating_sub(1)
+            };
+            for col in col_start..=col_end {
+                let idx = row * size.columns + col;
+                if let Some(cell) = cells.get(idx) {
+                    result.push(cell.ch);
+                }
+            }
+            let trimmed_len = result.trim_end_matches(' ').len();
+            result.truncate(trimmed_len);
+            if row != end.row {
+                result.push('\n');
+            }
+        }
+        let trimmed_len = result.trim_end_matches(' ').len();
+        result.truncate(trimmed_len);
+        if result.is_empty() {
+            None
+        } else {
+            Some(result)
+        }
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selection = None;
     }
 
     pub fn scroll_to_relative(&mut self, rel: f32) {

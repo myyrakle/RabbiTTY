@@ -135,6 +135,21 @@ impl App {
             Message::TabBarScrolled(x) => {
                 self.tab_bar_scroll_x = x;
             }
+            Message::SelectionChanged(sel) => {
+                if self.active_tab != SETTINGS_TAB_INDEX
+                    && let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                        tab.selection = sel;
+                    }
+            }
+            Message::PasteClipboard(text) => {
+                if !text.is_empty()
+                    && self.active_tab != SETTINGS_TAB_INDEX
+                    && let Some(tab) = self.tabs.get_mut(self.active_tab)
+                    && let crate::gui::tab::TerminalSession::Active(session) = &tab.session
+                {
+                    let _ = session.send_bytes(text.as_bytes());
+                }
+            }
             Message::TerminalScroll(rel_y) => {
                 if self.ignore_scrollable_sync {
                     self.ignore_scrollable_sync = false;
@@ -214,7 +229,25 @@ impl App {
         if self.active_tab == SETTINGS_TAB_INDEX {
             return Task::none();
         }
+
+        // Copy: Cmd+C (macOS) / Ctrl+Shift+C (other)
+        if is_copy_shortcut(&key, modifiers)
+            && let Some(tab) = self.tabs.get_mut(self.active_tab)
+                && let Some(text) = tab.selected_text() {
+                    tab.clear_selection();
+                    return iced::clipboard::write(text);
+                }
+            // No selection → fall through to send Ctrl+C to terminal
+
+        // Paste: Cmd+V (macOS) / Ctrl+Shift+V (other)
+        if is_paste_shortcut(&key, modifiers) {
+            return iced::clipboard::read()
+                .map(|content| Message::PasteClipboard(content.unwrap_or_default()));
+        }
+
+        // Clear selection on any other key input
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.clear_selection();
             tab.handle_key(&key, modifiers, text.as_deref());
         }
         self.ignore_scrollable_sync = true;
@@ -247,4 +280,26 @@ impl App {
             Task::none()
         }
     }
+}
+
+fn is_copy_shortcut(key: &Key, modifiers: iced::keyboard::Modifiers) -> bool {
+    if let Key::Character(c) = key
+        && c.eq_ignore_ascii_case("c") {
+            #[cfg(target_os = "macos")]
+            return modifiers.logo();
+            #[cfg(not(target_os = "macos"))]
+            return modifiers.ctrl() && modifiers.shift();
+        }
+    false
+}
+
+fn is_paste_shortcut(key: &Key, modifiers: iced::keyboard::Modifiers) -> bool {
+    if let Key::Character(c) = key
+        && c.eq_ignore_ascii_case("v") {
+            #[cfg(target_os = "macos")]
+            return modifiers.logo();
+            #[cfg(not(target_os = "macos"))]
+            return modifiers.ctrl() && modifiers.shift();
+        }
+    false
 }

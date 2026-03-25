@@ -1,9 +1,9 @@
-use crate::terminal::{CellVisual, TerminalSize};
+use crate::terminal::{CellVisual, GridPos, Selection, TerminalSize};
 use iced::mouse;
 use iced::wgpu;
 use iced::widget::shader::Program as ShaderProgram;
-use iced::widget::shader::{Pipeline, Primitive, Shader, Viewport};
-use iced::{Length, Rectangle};
+use iced::widget::shader::{Action, Pipeline, Primitive, Shader, Viewport};
+use iced::{Event, Length, Point, Rectangle};
 use std::sync::Arc;
 
 mod bg;
@@ -12,6 +12,8 @@ mod text;
 use bg::BackgroundPipeline;
 use composite::CompositePipeline;
 use text::TextPipelineData;
+
+const SELECTION_BG: [f32; 4] = [0.25, 0.38, 0.60, 1.0];
 
 /// Iced shader wrapper for terminal rendering.
 #[derive(Debug, Clone)]
@@ -22,17 +24,81 @@ pub struct TerminalProgram {
     pub terminal_font_size: f32,
     pub padding: [f32; 2],
     pub clear_color: [f32; 4],
+    pub selection: Option<Selection>,
 }
 
 impl TerminalProgram {
     pub fn widget(self) -> Shader<crate::gui::app::Message, Self> {
         Shader::new(self).width(Length::Fill).height(Length::Fill)
     }
+
+    fn pixel_to_grid(&self, pos: Point, bounds: Rectangle) -> GridPos {
+        let inner_w = (bounds.width - self.padding[0] * 2.0).max(1.0);
+        let inner_h = (bounds.height - self.padding[1] * 2.0).max(1.0);
+        let cell_w = inner_w / self.grid_size.columns.max(1) as f32;
+        let cell_h = inner_h / self.grid_size.lines.max(1) as f32;
+        let x = (pos.x - self.padding[0]).max(0.0);
+        let y = (pos.y - self.padding[1]).max(0.0);
+        let col = (x / cell_w) as usize;
+        let row = (y / cell_h) as usize;
+        GridPos {
+            row: row.min(self.grid_size.lines.saturating_sub(1)),
+            col: col.min(self.grid_size.columns.saturating_sub(1)),
+        }
+    }
 }
 
-impl ShaderProgram<crate::gui::app::Message> for TerminalProgram {
-    type State = ();
+#[derive(Default)]
+pub struct TerminalShaderState {
+    dragging: bool,
+    drag_start: Option<GridPos>,
+}
+
+type Message = crate::gui::app::Message;
+
+impl ShaderProgram<Message> for TerminalProgram {
+    type State = TerminalShaderState;
     type Primitive = TerminalPrimitive;
+
+    fn update(
+        &self,
+        state: &mut Self::State,
+        event: &Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<Action<Message>> {
+        match event {
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                if let Some(pos) = cursor.position_in(bounds) {
+                    let grid_pos = self.pixel_to_grid(pos, bounds);
+                    state.dragging = true;
+                    state.drag_start = Some(grid_pos);
+                    return Some(Action::publish(Message::SelectionChanged(None)).and_capture());
+                }
+            }
+            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                if state.dragging
+                    && let (Some(start), Some(pos)) = (state.drag_start, cursor.position_in(bounds))
+                    {
+                        let end = self.pixel_to_grid(pos, bounds);
+                        if start != end {
+                            let sel = Selection { start, end };
+                            return Some(
+                                Action::publish(Message::SelectionChanged(Some(sel))).and_capture(),
+                            );
+                        }
+                    }
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                if state.dragging {
+                    state.dragging = false;
+                    return Some(Action::capture());
+                }
+            }
+            _ => {}
+        }
+        None
+    }
 
     fn draw(
         &self,
@@ -55,6 +121,20 @@ impl ShaderProgram<crate::gui::app::Message> for TerminalProgram {
             clear_color: self.clear_color,
             terminal_font_selection: self.terminal_font_selection.clone(),
             terminal_font_size: self.terminal_font_size,
+            selection: self.selection,
+        }
+    }
+
+    fn mouse_interaction(
+        &self,
+        _state: &Self::State,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        if cursor.is_over(bounds) {
+            mouse::Interaction::Text
+        } else {
+            mouse::Interaction::default()
         }
     }
 }
@@ -70,6 +150,7 @@ pub struct TerminalPipeline {
     last_viewport: [f32; 2],
     last_offset: [f32; 2],
     last_font_size: f32,
+    last_selection: Option<Selection>,
 }
 
 impl Pipeline for TerminalPipeline {
@@ -84,6 +165,7 @@ impl Pipeline for TerminalPipeline {
             last_viewport: [0.0; 2],
             last_offset: [0.0; 2],
             last_font_size: 0.0,
+            last_selection: None,
         }
     }
 }
@@ -97,6 +179,7 @@ pub struct TerminalPrimitive {
     clear_color: [f32; 4],
     terminal_font_selection: Option<String>,
     terminal_font_size: f32,
+    selection: Option<Selection>,
 }
 
 impl Primitive for TerminalPrimitive {
@@ -129,7 +212,8 @@ impl Primitive for TerminalPrimitive {
             && cell_size == pipeline.last_cell_size
             && viewport == pipeline.last_viewport
             && offset == pipeline.last_offset
-            && (font_size - pipeline.last_font_size).abs() < 0.01;
+            && (font_size - pipeline.last_font_size).abs() < 0.01
+            && self.selection == pipeline.last_selection;
 
         if unchanged {
             return;
@@ -141,14 +225,35 @@ impl Primitive for TerminalPrimitive {
         pipeline.last_viewport = viewport;
         pipeline.last_offset = offset;
         pipeline.last_font_size = font_size;
+        pipeline.last_selection = self.selection;
+
+        // Apply selection highlight to cells
+        let cells_modified;
+        let cells_slice = if let Some(ref sel) = self.selection {
+            cells_modified = self
+                .cells
+                .iter()
+                .map(|cell| {
+                    if sel.contains(cell.row, cell.col) {
+                        CellVisual {
+                            bg: SELECTION_BG,
+                            ..*cell
+                        }
+                    } else {
+                        *cell
+                    }
+                })
+                .collect::<Vec<_>>();
+            &cells_modified
+        } else {
+            self.cells.as_slice()
+        };
 
         {
             pipeline
                 .bg
                 .update_uniforms(queue, cell_size, viewport, offset);
-            pipeline
-                .bg
-                .prepare_instances(device, queue, self.cells.as_slice());
+            pipeline.bg.prepare_instances(device, queue, cells_slice);
         }
 
         {
@@ -159,7 +264,7 @@ impl Primitive for TerminalPrimitive {
             pipeline.text.update_uniforms(queue, viewport, offset);
             pipeline
                 .text
-                .prepare_instances(device, queue, self.cells.as_slice(), cell_size);
+                .prepare_instances(device, queue, cells_slice, cell_size);
         }
     }
 
