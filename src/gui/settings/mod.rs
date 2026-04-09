@@ -38,9 +38,7 @@ pub enum SettingsField {
     ThemeCursor,
     ThemeBackgroundOpacity,
     #[allow(dead_code)]
-    ThemeMacosBlurMaterial,
-    #[allow(dead_code)]
-    ThemeMacosBlurAlpha,
+    ThemeMacosBlurRadius,
     ShortcutNewTab,
     ShortcutCloseTab,
     ShortcutOpenSettings,
@@ -153,8 +151,7 @@ pub struct SettingsDraft {
     pub cursor: String,
     pub background_opacity: String,
     pub blur_enabled: bool,
-    pub macos_blur_material: String,
-    pub macos_blur_alpha: String,
+    pub macos_blur_radius: String,
     pub shortcut_new_tab: String,
     pub shortcut_close_tab: String,
     pub shortcut_open_settings: String,
@@ -179,8 +176,7 @@ impl SettingsDraft {
             cursor: format_rgb(config.theme.cursor),
             background_opacity: format!("{:.2}", config.theme.background_opacity),
             blur_enabled: config.theme.blur_enabled,
-            macos_blur_material: config.theme.macos_blur_material.clone(),
-            macos_blur_alpha: format!("{:.2}", config.theme.macos_blur_alpha),
+            macos_blur_radius: format!("{}", config.theme.macos_blur_radius),
             shortcut_new_tab: config.shortcuts.new_tab.clone(),
             shortcut_close_tab: config.shortcuts.close_tab.clone(),
             shortcut_open_settings: config.shortcuts.open_settings.clone(),
@@ -235,8 +231,7 @@ impl SettingsDraft {
             SettingsField::ThemeBackground => self.background = value,
             SettingsField::ThemeCursor => self.cursor = value,
             SettingsField::ThemeBackgroundOpacity => self.background_opacity = value,
-            SettingsField::ThemeMacosBlurMaterial => self.macos_blur_material = value,
-            SettingsField::ThemeMacosBlurAlpha => self.macos_blur_alpha = value,
+            SettingsField::ThemeMacosBlurRadius => self.macos_blur_radius = value,
             SettingsField::ShortcutNewTab => self.shortcut_new_tab = value,
             SettingsField::ShortcutCloseTab => self.shortcut_close_tab = value,
             SettingsField::ShortcutOpenSettings => self.shortcut_open_settings = value,
@@ -268,13 +263,10 @@ impl SettingsDraft {
             ansi_colors,
             background_opacity: parse_f32(&self.background_opacity),
             blur_enabled: Some(self.blur_enabled),
-            macos_blur_alpha: parse_f32(&self.macos_blur_alpha),
+            macos_blur_radius: self.macos_blur_radius.trim().parse::<i32>().ok(),
             ..Default::default()
         };
 
-        if !self.macos_blur_material.trim().is_empty() {
-            updates.macos_blur_material = Some(self.macos_blur_material.clone());
-        }
         if !self.shortcut_new_tab.trim().is_empty() {
             updates.shortcut_new_tab = Some(self.shortcut_new_tab.clone());
         }

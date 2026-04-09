@@ -86,18 +86,12 @@ pub fn view<'a>(_config: &'a AppConfig, draft: &'a SettingsDraft) -> Element<'a,
         "macOS Blur",
         column(vec![
             input_row_with_suffix(
-                "Material",
-                &draft.macos_blur_material,
-                SettingsField::ThemeMacosBlurMaterial,
-                "sidebar / menu / titlebar",
+                "Blur Radius",
+                &draft.macos_blur_radius,
+                SettingsField::ThemeMacosBlurRadius,
+                "0 ~ 100",
             ),
-            input_row_with_suffix(
-                "Alpha",
-                &draft.macos_blur_alpha,
-                SettingsField::ThemeMacosBlurAlpha,
-                "0.0 ~ 1.0",
-            ),
-            hint_text("Material controls style family; alpha controls intensity."),
+            hint_text("Controls the intensity of the window background blur effect."),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)

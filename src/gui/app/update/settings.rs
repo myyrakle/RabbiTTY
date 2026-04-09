@@ -9,13 +9,19 @@ impl App {
         let updates = self.settings_draft.to_updates();
 
         #[cfg(target_os = "macos")]
-        if let Some(new_enabled) = updates.blur_enabled
-            && new_enabled != self.config.theme.blur_enabled
         {
-            self.show_restart_confirm = true;
-            self.pending_settings_updates = Some(updates);
-            self.pending_save_on_restart = true;
-            return Task::none();
+            let blur_toggled = updates
+                .blur_enabled
+                .is_some_and(|v| v != self.config.theme.blur_enabled);
+            let radius_changed = updates
+                .macos_blur_radius
+                .is_some_and(|v| v != self.config.theme.macos_blur_radius);
+            if blur_toggled || radius_changed {
+                self.show_restart_confirm = true;
+                self.pending_settings_updates = Some(updates);
+                self.pending_save_on_restart = save;
+                return Task::none();
+            }
         }
 
         let resize_task = self.apply_updates_to_runtime(updates);

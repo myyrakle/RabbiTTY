@@ -1,10 +1,16 @@
 use crate::config::ThemeConfig;
 use iced::window::raw_window_handle::{RawWindowHandle, WindowHandle};
-use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
-    NSVisualEffectState, NSVisualEffectView, NSWindowOrderingMode,
-};
-use objc2_foundation::MainThreadMarker;
+use objc2_app_kit::{NSColor, NSView};
+
+// macOS private CoreGraphics SPI for window background blur.
+unsafe extern "C" {
+    fn CGSSetWindowBackgroundBlurRadius(
+        connection: *mut std::ffi::c_void,
+        window_number: isize,
+        radius: i32,
+    ) -> i32;
+    fn CGSDefaultConnectionForThread() -> *mut std::ffi::c_void;
+}
 
 pub fn apply_style(handle: WindowHandle<'_>, theme: &ThemeConfig) {
     apply_style_inner(handle, theme);
@@ -19,55 +25,25 @@ fn apply_style_inner(handle: WindowHandle<'_>, theme: &ThemeConfig) {
         return;
     };
 
-    let Some(mtm) = MainThreadMarker::new() else {
-        return;
-    };
-
     let view: &NSView = unsafe { appkit.ns_view.cast().as_ref() };
     let Some(window) = view.window() else {
         return;
     };
 
-    let Some(content_view) = window.contentView() else {
-        return;
-    };
+    // Make window non opaque with clear background so blur shows through
+    window.setOpaque(false);
+    window.setBackgroundColor(Some(&NSColor::clearColor()));
 
-    if !std::ptr::eq(content_view.as_ref(), view) {
-        return;
+    // Force the CAMetalLayer (wgpu surface) to be non-opaque
+    if let Some(layer) = view.layer() {
+        layer.setOpaque(false);
     }
 
-    let Some(superview) = (unsafe { view.superview() }) else {
-        return;
-    };
-
-    let blur = NSVisualEffectView::new(mtm);
-    blur.setFrame(view.frame());
-    blur.setMaterial(macos_material_from_str(&theme.macos_blur_material));
-    blur.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-    blur.setState(NSVisualEffectState::Active);
-    blur.setAlphaValue(f64::from(theme.macos_blur_alpha));
-    blur.setAutoresizingMask(
-        NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
-    );
-    superview.addSubview_positioned_relativeTo(&blur, NSWindowOrderingMode::Below, Some(view));
-}
-
-fn macos_material_from_str(value: &str) -> NSVisualEffectMaterial {
-    match value {
-        "titlebar" => NSVisualEffectMaterial::Titlebar,
-        "selection" => NSVisualEffectMaterial::Selection,
-        "menu" => NSVisualEffectMaterial::Menu,
-        "popover" => NSVisualEffectMaterial::Popover,
-        "sidebar" => NSVisualEffectMaterial::Sidebar,
-        "headerview" => NSVisualEffectMaterial::HeaderView,
-        "sheet" => NSVisualEffectMaterial::Sheet,
-        "windowbackground" => NSVisualEffectMaterial::WindowBackground,
-        "hudwindow" => NSVisualEffectMaterial::HUDWindow,
-        "fullscreenui" => NSVisualEffectMaterial::FullScreenUI,
-        "tooltip" => NSVisualEffectMaterial::ToolTip,
-        "contentbackground" => NSVisualEffectMaterial::ContentBackground,
-        "underwindowbackground" => NSVisualEffectMaterial::UnderWindowBackground,
-        "underpagebackground" => NSVisualEffectMaterial::UnderPageBackground,
-        _ => NSVisualEffectMaterial::Sidebar,
+    // Apply background blur using CoreGraphics
+    let blur_radius = theme.macos_blur_radius;
+    let window_number = window.windowNumber();
+    unsafe {
+        let connection = CGSDefaultConnectionForThread();
+        CGSSetWindowBackgroundBlurRadius(connection, window_number, blur_radius);
     }
 }

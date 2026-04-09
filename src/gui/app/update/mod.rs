@@ -259,7 +259,22 @@ impl App {
                 .map(|content| Message::PasteClipboard(content.unwrap_or_default()));
         }
 
-        // Clear selection on any other key input
+        // Ignore modifier-only key presses
+        if matches!(
+            key,
+            Key::Named(
+                Named::Super
+                    | Named::Control
+                    | Named::Shift
+                    | Named::Alt
+                    | Named::Meta
+                    | Named::Hyper
+            )
+        ) {
+            return Task::none();
+        }
+
+        // Clear selection on actual key input
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
             tab.clear_selection();
             tab.handle_key(&key, modifiers, text.as_deref());

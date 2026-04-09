@@ -11,8 +11,7 @@ pub const DEFAULT_THEME_BACKGROUND: [u8; 3] = [0x1e, 0x1e, 0x2e];
 pub const DEFAULT_THEME_CURSOR: [u8; 3] = [0x89, 0xb4, 0xfa];
 pub const DEFAULT_THEME_BG_OPACITY: f32 = 1.0;
 pub const DEFAULT_BLUR_ENABLED: bool = true;
-pub const DEFAULT_MACOS_BLUR_MATERIAL: &str = "sidebar";
-pub const DEFAULT_MACOS_BLUR_ALPHA: f32 = 1.0;
+pub const DEFAULT_MACOS_BLUR_RADIUS: i32 = 20;
 
 #[cfg(target_os = "macos")]
 pub const DEFAULT_SHORTCUT_NEW_TAB: &str = "Command+T";
@@ -104,8 +103,7 @@ pub struct ThemeConfig {
     pub ansi_colors: Option<[[u8; 3]; 16]>,
     pub background_opacity: f32,
     pub blur_enabled: bool,
-    pub macos_blur_material: String,
-    pub macos_blur_alpha: f32,
+    pub macos_blur_radius: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -163,8 +161,7 @@ struct ThemeFileConfig {
     ansi_colors: Option<Vec<String>>,
     background_opacity: Option<f32>,
     blur_enabled: Option<bool>,
-    macos_blur_material: Option<String>,
-    macos_blur_alpha: Option<f32>,
+    macos_blur_radius: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -192,8 +189,7 @@ pub struct AppConfigUpdates {
     pub ansi_colors: Option<[[u8; 3]; 16]>,
     pub background_opacity: Option<f32>,
     pub blur_enabled: Option<bool>,
-    pub macos_blur_material: Option<String>,
-    pub macos_blur_alpha: Option<f32>,
+    pub macos_blur_radius: Option<i32>,
     pub shortcut_new_tab: Option<String>,
     pub shortcut_close_tab: Option<String>,
     pub shortcut_open_settings: Option<String>,
@@ -226,8 +222,7 @@ impl Default for AppConfig {
                 ansi_colors: None,
                 background_opacity: DEFAULT_THEME_BG_OPACITY,
                 blur_enabled: DEFAULT_BLUR_ENABLED,
-                macos_blur_material: DEFAULT_MACOS_BLUR_MATERIAL.to_string(),
-                macos_blur_alpha: DEFAULT_MACOS_BLUR_ALPHA,
+                macos_blur_radius: DEFAULT_MACOS_BLUR_RADIUS,
             },
             shortcuts: ShortcutsConfig {
                 new_tab: DEFAULT_SHORTCUT_NEW_TAB.to_string(),
@@ -307,12 +302,8 @@ impl AppConfig {
         if let Some(enabled) = updates.blur_enabled {
             self.theme.blur_enabled = enabled;
         }
-        if let Some(material) = updates.macos_blur_material {
-            self.theme.macos_blur_material =
-                sanitize_macos_material(&material, &self.theme.macos_blur_material);
-        }
-        if let Some(alpha) = updates.macos_blur_alpha {
-            self.theme.macos_blur_alpha = sanitize_opacity(alpha, self.theme.macos_blur_alpha);
+        if let Some(radius) = updates.macos_blur_radius {
+            self.theme.macos_blur_radius = radius.clamp(0, 100);
         }
 
         if let Some(value) = updates.shortcut_new_tab {
@@ -429,12 +420,8 @@ impl AppConfig {
             if let Some(enabled) = theme.blur_enabled {
                 self.theme.blur_enabled = enabled;
             }
-            if let Some(material) = theme.macos_blur_material.as_deref() {
-                self.theme.macos_blur_material =
-                    sanitize_macos_material(material, &self.theme.macos_blur_material);
-            }
-            if let Some(alpha) = theme.macos_blur_alpha {
-                self.theme.macos_blur_alpha = sanitize_opacity(alpha, self.theme.macos_blur_alpha);
+            if let Some(radius) = theme.macos_blur_radius {
+                self.theme.macos_blur_radius = radius.clamp(0, 100);
             }
         }
 
@@ -505,27 +492,6 @@ fn sanitize_opacity(value: f32, fallback: f32) -> f32 {
         value
     } else {
         fallback
-    }
-}
-
-fn sanitize_macos_material(value: &str, fallback: &str) -> String {
-    let normalized = value.trim().to_ascii_lowercase();
-    match normalized.as_str() {
-        "titlebar"
-        | "selection"
-        | "menu"
-        | "popover"
-        | "sidebar"
-        | "headerview"
-        | "sheet"
-        | "windowbackground"
-        | "hudwindow"
-        | "fullscreenui"
-        | "tooltip"
-        | "contentbackground"
-        | "underwindowbackground"
-        | "underpagebackground" => normalized,
-        _ => fallback.to_string(),
     }
 }
 
@@ -716,8 +682,7 @@ impl From<&AppConfig> for FileConfig {
                 }),
                 background_opacity: Some(config.theme.background_opacity),
                 blur_enabled: Some(config.theme.blur_enabled),
-                macos_blur_material: Some(config.theme.macos_blur_material.clone()),
-                macos_blur_alpha: Some(config.theme.macos_blur_alpha),
+                macos_blur_radius: Some(config.theme.macos_blur_radius),
             }),
             shortcuts: Some(ShortcutsFileConfig {
                 new_tab: Some(config.shortcuts.new_tab.clone()),
@@ -769,7 +734,7 @@ fn ensure_config_file(path: &Path) -> std::io::Result<()> {
 
 fn default_config_toml() -> String {
     format!(
-        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\nfont_selection = \"\"\nfont_size = {font_size:.1}\npadding_x = {padding_x:.1}\npadding_y = {padding_y:.1}\n\n[theme]\ncolor_scheme = \"Catppuccin Mocha\"\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_material = \"{macos_blur_material}\"\nmacos_blur_alpha = {macos_blur_alpha:.2}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\n",
+        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\nfont_selection = \"\"\nfont_size = {font_size:.1}\npadding_x = {padding_x:.1}\npadding_y = {padding_y:.1}\n\n[theme]\ncolor_scheme = \"Catppuccin Mocha\"\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_radius = {macos_blur_radius}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\n",
         width = DEFAULT_WINDOW_WIDTH as u32,
         height = DEFAULT_WINDOW_HEIGHT as u32,
         font_size = DEFAULT_TERMINAL_FONT_SIZE,
@@ -786,8 +751,7 @@ fn default_config_toml() -> String {
         cur_b = DEFAULT_THEME_CURSOR[2],
         opacity = DEFAULT_THEME_BG_OPACITY,
         blur_enabled = DEFAULT_BLUR_ENABLED,
-        macos_blur_material = DEFAULT_MACOS_BLUR_MATERIAL,
-        macos_blur_alpha = DEFAULT_MACOS_BLUR_ALPHA,
+        macos_blur_radius = DEFAULT_MACOS_BLUR_RADIUS,
         shortcut_new_tab = DEFAULT_SHORTCUT_NEW_TAB,
         shortcut_close_tab = DEFAULT_SHORTCUT_CLOSE_TAB,
         shortcut_open_settings = DEFAULT_SHORTCUT_OPEN_SETTINGS,
@@ -911,8 +875,7 @@ mod tests {
             window_width: Some(-1.0),
             window_height: Some(f32::NAN),
             background_opacity: Some(1.5),
-            macos_blur_alpha: Some(-0.5),
-            macos_blur_material: Some("invalid-material".to_string()),
+            macos_blur_radius: Some(200),
             shortcut_new_tab: Some("Ctrl+".to_string()),
             shortcut_close_tab: Some("Ctrl+W".to_string()),
             ..Default::default()
@@ -924,14 +887,7 @@ mod tests {
             config.theme.background_opacity,
             original.theme.background_opacity
         );
-        assert_eq!(
-            config.theme.macos_blur_alpha,
-            original.theme.macos_blur_alpha
-        );
-        assert_eq!(
-            config.theme.macos_blur_material,
-            original.theme.macos_blur_material
-        );
+        assert_eq!(config.theme.macos_blur_radius, 100); // clamped from 200
         assert_eq!(config.shortcuts.new_tab, original.shortcuts.new_tab);
         assert_eq!(config.shortcuts.close_tab, "Ctrl+W");
     }
