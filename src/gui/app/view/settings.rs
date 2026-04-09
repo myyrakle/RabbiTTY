@@ -102,7 +102,9 @@ impl App {
             self.settings_category,
             &self.config,
             &self.settings_draft,
-            &self.terminal_font_options,
+            &self.font_combo_state,
+            self.show_all_fonts,
+            &self.all_font_options,
         ))
         .padding([0, 12])
         .width(Length::Fill);

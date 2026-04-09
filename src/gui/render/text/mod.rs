@@ -433,12 +433,11 @@ impl TextPipelineData {
             self.line_min_y = 0.0;
             self.line_height = scaled.height();
         }
-        let mut advance = 0.0;
-        for ch in ['M', 'W', '0', ' '].into_iter() {
-            let candidate = scaled.h_advance(self.font.glyph_id(ch));
-            if candidate > 0.0 {
+        let mut advance: f32 = 0.0;
+        for code in 32u8..=126u8 {
+            let candidate = scaled.h_advance(self.font.glyph_id(code as char));
+            if candidate > advance {
                 advance = candidate;
-                break;
             }
         }
         if advance <= 0.0 {

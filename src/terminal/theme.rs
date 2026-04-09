@@ -12,111 +12,199 @@ pub struct TerminalTheme {
     pub(super) background_opacity: f32,
 }
 
-const DEFAULT_FOREGROUND: Rgb = Rgb {
-    r: 0xcd,
-    g: 0xd6,
-    b: 0xf4,
-};
-const DEFAULT_BACKGROUND: Rgb = Rgb {
-    r: 0x1e,
-    g: 0x1e,
-    b: 0x2e,
-};
-const DEFAULT_CURSOR: Rgb = Rgb {
-    r: 0x89,
-    g: 0xb4,
-    b: 0xfa,
-};
-const DEFAULT_ANSI: [Rgb; 16] = [
-    Rgb {
-        r: 0x00,
-        g: 0x00,
-        b: 0x00,
+/// A named color preset with foreground, background, cursor, and 16 ANSI colors.
+#[derive(Debug, Clone, Copy)]
+pub struct ColorPreset {
+    pub name: &'static str,
+    pub fg: [u8; 3],
+    pub bg: [u8; 3],
+    pub cursor: [u8; 3],
+    pub ansi: [[u8; 3]; 16],
+}
+
+pub const PRESETS: &[ColorPreset] = &[
+    ColorPreset {
+        name: "Catppuccin Mocha",
+        fg: [0xcd, 0xd6, 0xf4],
+        bg: [0x1e, 0x1e, 0x2e],
+        cursor: [0xf5, 0xe0, 0xdc],
+        ansi: [
+            [0x45, 0x47, 0x5a], // black
+            [0xf3, 0x8b, 0xa8], // red
+            [0xa6, 0xe3, 0xa1], // green
+            [0xf9, 0xe2, 0xaf], // yellow
+            [0x89, 0xb4, 0xfa], // blue
+            [0xf5, 0xc2, 0xe7], // magenta
+            [0x94, 0xe2, 0xd5], // cyan
+            [0xba, 0xc2, 0xde], // white
+            [0x58, 0x5b, 0x70], // bright black
+            [0xf3, 0x8b, 0xa8], // bright red
+            [0xa6, 0xe3, 0xa1], // bright green
+            [0xf9, 0xe2, 0xaf], // bright yellow
+            [0x89, 0xb4, 0xfa], // bright blue
+            [0xf5, 0xc2, 0xe7], // bright magenta
+            [0x94, 0xe2, 0xd5], // bright cyan
+            [0xa6, 0xad, 0xc8], // bright white
+        ],
     },
-    Rgb {
-        r: 0xcd,
-        g: 0x00,
-        b: 0x00,
+    ColorPreset {
+        name: "Dracula",
+        fg: [0xf8, 0xf8, 0xf2],
+        bg: [0x28, 0x2a, 0x36],
+        cursor: [0xf8, 0xf8, 0xf2],
+        ansi: [
+            [0x21, 0x22, 0x2c], // black
+            [0xff, 0x55, 0x55], // red
+            [0x50, 0xfa, 0x7b], // green
+            [0xf1, 0xfa, 0x8c], // yellow
+            [0xbd, 0x93, 0xf9], // blue
+            [0xff, 0x79, 0xc6], // magenta
+            [0x8b, 0xe9, 0xfd], // cyan
+            [0xf8, 0xf8, 0xf2], // white
+            [0x62, 0x72, 0xa4], // bright black
+            [0xff, 0x6e, 0x6e], // bright red
+            [0x69, 0xff, 0x94], // bright green
+            [0xff, 0xff, 0xa5], // bright yellow
+            [0xd6, 0xac, 0xff], // bright blue
+            [0xff, 0x92, 0xdf], // bright magenta
+            [0xa4, 0xff, 0xff], // bright cyan
+            [0xff, 0xff, 0xff], // bright white
+        ],
     },
-    Rgb {
-        r: 0x00,
-        g: 0xcd,
-        b: 0x00,
+    ColorPreset {
+        name: "Tokyo Night",
+        fg: [0xa9, 0xb1, 0xd6],
+        bg: [0x1a, 0x1b, 0x26],
+        cursor: [0xc0, 0xca, 0xf5],
+        ansi: [
+            [0x15, 0x16, 0x1e], // black
+            [0xf7, 0x76, 0x8e], // red
+            [0x9e, 0xce, 0x6a], // green
+            [0xe0, 0xaf, 0x68], // yellow
+            [0x7a, 0xa2, 0xf7], // blue
+            [0xbb, 0x9a, 0xf7], // magenta
+            [0x7d, 0xcf, 0xff], // cyan
+            [0xa9, 0xb1, 0xd6], // white
+            [0x41, 0x48, 0x68], // bright black
+            [0xf7, 0x76, 0x8e], // bright red
+            [0x9e, 0xce, 0x6a], // bright green
+            [0xe0, 0xaf, 0x68], // bright yellow
+            [0x7a, 0xa2, 0xf7], // bright blue
+            [0xbb, 0x9a, 0xf7], // bright magenta
+            [0x7d, 0xcf, 0xff], // bright cyan
+            [0xc0, 0xca, 0xf5], // bright white
+        ],
     },
-    Rgb {
-        r: 0xcd,
-        g: 0xcd,
-        b: 0x00,
+    ColorPreset {
+        name: "Nord",
+        fg: [0xd8, 0xde, 0xe9],
+        bg: [0x2e, 0x34, 0x40],
+        cursor: [0xd8, 0xde, 0xe9],
+        ansi: [
+            [0x3b, 0x42, 0x52], // black
+            [0xbf, 0x61, 0x6a], // red
+            [0xa3, 0xbe, 0x8c], // green
+            [0xeb, 0xcb, 0x8b], // yellow
+            [0x81, 0xa1, 0xc1], // blue
+            [0xb4, 0x8e, 0xad], // magenta
+            [0x88, 0xc0, 0xd0], // cyan
+            [0xe5, 0xe9, 0xf0], // white
+            [0x4c, 0x56, 0x6a], // bright black
+            [0xbf, 0x61, 0x6a], // bright red
+            [0xa3, 0xbe, 0x8c], // bright green
+            [0xeb, 0xcb, 0x8b], // bright yellow
+            [0x81, 0xa1, 0xc1], // bright blue
+            [0xb4, 0x8e, 0xad], // bright magenta
+            [0x8f, 0xbc, 0xbb], // bright cyan
+            [0xec, 0xef, 0xf4], // bright white
+        ],
     },
-    Rgb {
-        r: 0x00,
-        g: 0x00,
-        b: 0xee,
+    ColorPreset {
+        name: "One Dark",
+        fg: [0xab, 0xb2, 0xbf],
+        bg: [0x28, 0x2c, 0x34],
+        cursor: [0x52, 0x8b, 0xff],
+        ansi: [
+            [0x28, 0x2c, 0x34], // black
+            [0xe0, 0x6c, 0x75], // red
+            [0x98, 0xc3, 0x79], // green
+            [0xe5, 0xc0, 0x7b], // yellow
+            [0x61, 0xaf, 0xef], // blue
+            [0xc6, 0x78, 0xdd], // magenta
+            [0x56, 0xb6, 0xc2], // cyan
+            [0xab, 0xb2, 0xbf], // white
+            [0x54, 0x58, 0x62], // bright black
+            [0xe0, 0x6c, 0x75], // bright red
+            [0x98, 0xc3, 0x79], // bright green
+            [0xe5, 0xc0, 0x7b], // bright yellow
+            [0x61, 0xaf, 0xef], // bright blue
+            [0xc6, 0x78, 0xdd], // bright magenta
+            [0x56, 0xb6, 0xc2], // bright cyan
+            [0xff, 0xff, 0xff], // bright white
+        ],
     },
-    Rgb {
-        r: 0xcd,
-        g: 0x00,
-        b: 0xcd,
+    ColorPreset {
+        name: "Gruvbox Dark",
+        fg: [0xeb, 0xdb, 0xb2],
+        bg: [0x28, 0x28, 0x28],
+        cursor: [0xeb, 0xdb, 0xb2],
+        ansi: [
+            [0x28, 0x28, 0x28], // black
+            [0xcc, 0x24, 0x1d], // red
+            [0x98, 0x97, 0x1a], // green
+            [0xd7, 0x99, 0x21], // yellow
+            [0x45, 0x85, 0x88], // blue
+            [0xb1, 0x62, 0x86], // magenta
+            [0x68, 0x9d, 0x6a], // cyan
+            [0xa8, 0x99, 0x84], // white
+            [0x92, 0x83, 0x74], // bright black
+            [0xfb, 0x49, 0x34], // bright red
+            [0xb8, 0xbb, 0x26], // bright green
+            [0xfa, 0xbd, 0x2f], // bright yellow
+            [0x83, 0xa5, 0x98], // bright blue
+            [0xd3, 0x86, 0x9b], // bright magenta
+            [0x8e, 0xc0, 0x7c], // bright cyan
+            [0xeb, 0xdb, 0xb2], // bright white
+        ],
     },
-    Rgb {
-        r: 0x00,
-        g: 0xcd,
-        b: 0xcd,
-    },
-    Rgb {
-        r: 0xe5,
-        g: 0xe5,
-        b: 0xe5,
-    },
-    Rgb {
-        r: 0x7f,
-        g: 0x7f,
-        b: 0x7f,
-    },
-    Rgb {
-        r: 0xff,
-        g: 0x00,
-        b: 0x00,
-    },
-    Rgb {
-        r: 0x00,
-        g: 0xff,
-        b: 0x00,
-    },
-    Rgb {
-        r: 0xff,
-        g: 0xff,
-        b: 0x00,
-    },
-    Rgb {
-        r: 0x5c,
-        g: 0x5c,
-        b: 0xff,
-    },
-    Rgb {
-        r: 0xff,
-        g: 0x00,
-        b: 0xff,
-    },
-    Rgb {
-        r: 0x00,
-        g: 0xff,
-        b: 0xff,
-    },
-    Rgb {
-        r: 0xff,
-        g: 0xff,
-        b: 0xff,
+    ColorPreset {
+        name: "Solarized Dark",
+        fg: [0x83, 0x94, 0x96],
+        bg: [0x00, 0x2b, 0x36],
+        cursor: [0x83, 0x94, 0x96],
+        ansi: [
+            [0x07, 0x36, 0x42], // black
+            [0xdc, 0x32, 0x2f], // red
+            [0x85, 0x99, 0x00], // green
+            [0xb5, 0x89, 0x00], // yellow
+            [0x26, 0x8b, 0xd2], // blue
+            [0xd3, 0x36, 0x82], // magenta
+            [0x2a, 0xa1, 0x98], // cyan
+            [0xee, 0xe8, 0xd5], // white
+            [0x00, 0x2b, 0x36], // bright black
+            [0xcb, 0x4b, 0x16], // bright red
+            [0x58, 0x6e, 0x75], // bright green
+            [0x65, 0x7b, 0x83], // bright yellow
+            [0x83, 0x94, 0x96], // bright blue
+            [0x6c, 0x71, 0xc4], // bright magenta
+            [0x93, 0xa1, 0xa1], // bright cyan
+            [0xfd, 0xf6, 0xe3], // bright white
+        ],
     },
 ];
 
+pub fn find_preset(name: &str) -> Option<&'static ColorPreset> {
+    PRESETS.iter().find(|p| p.name.eq_ignore_ascii_case(name))
+}
+
 impl Default for TerminalTheme {
     fn default() -> Self {
+        let preset = &PRESETS[0]; // Catppuccin Mocha
         Self {
-            foreground: DEFAULT_FOREGROUND,
-            background: DEFAULT_BACKGROUND,
-            cursor: DEFAULT_CURSOR,
-            ansi: DEFAULT_ANSI,
+            foreground: rgb_from_triplet(preset.fg),
+            background: rgb_from_triplet(preset.bg),
+            cursor: rgb_from_triplet(preset.cursor),
+            ansi: preset.ansi.map(rgb_from_triplet),
             background_opacity: 1.0,
         }
     }
@@ -124,12 +212,21 @@ impl Default for TerminalTheme {
 
 impl TerminalTheme {
     pub fn from_config(config: &AppConfig) -> Self {
-        let mut theme = Self::default();
-        theme.foreground = rgb_from_triplet(config.theme.foreground);
-        theme.background = rgb_from_triplet(config.theme.background);
-        theme.cursor = rgb_from_triplet(config.theme.cursor);
-        theme.background_opacity = config.theme.background_opacity;
-        theme
+        let base_ansi = if let Some(preset) = find_preset(&config.theme.color_scheme) {
+            preset.ansi.map(rgb_from_triplet)
+        } else if let Some(ref ansi) = config.theme.ansi_colors {
+            ansi.map(rgb_from_triplet)
+        } else {
+            PRESETS[0].ansi.map(rgb_from_triplet)
+        };
+
+        Self {
+            foreground: rgb_from_triplet(config.theme.foreground),
+            background: rgb_from_triplet(config.theme.background),
+            cursor: rgb_from_triplet(config.theme.cursor),
+            ansi: base_ansi,
+            background_opacity: config.theme.background_opacity,
+        }
     }
 
     pub(super) fn named_color(&self, named: NamedColor) -> Rgb {
@@ -224,6 +321,91 @@ pub(super) fn resolve_rgb(
             }
             colors[named].unwrap_or_else(|| theme.named_color(named))
         }
+    }
+}
+
+/// Minimum WCAG contrast ratio for terminal text readability.
+/// 3.0 is a good balance - ensures dark blue/red are visible on dark backgrounds
+/// without washing out intentionally dim colors too aggressively.
+const MIN_CONTRAST_RATIO: f32 = 3.0;
+
+/// Ensure foreground has minimum contrast against background.
+/// If contrast is too low, lightens or darkens fg until the ratio is met.
+pub(super) fn enforce_min_contrast(fg: Rgb, bg: Rgb) -> Rgb {
+    let fg_lum = relative_luminance(fg);
+    let bg_lum = relative_luminance(bg);
+    let ratio = contrast_ratio(fg_lum, bg_lum);
+
+    if ratio >= MIN_CONTRAST_RATIO {
+        return fg;
+    }
+
+    // Determine direction: lighten fg on dark bg, darken fg on light bg
+    let lighten = bg_lum < 0.5;
+
+    // Binary search for the right adjustment
+    let mut lo: f32 = 0.0;
+    let mut hi: f32 = 1.0;
+    let mut best = fg;
+
+    for _ in 0..8 {
+        let mid = (lo + hi) / 2.0;
+        let candidate = if lighten {
+            mix_rgb(
+                fg,
+                Rgb {
+                    r: 255,
+                    g: 255,
+                    b: 255,
+                },
+                mid,
+            )
+        } else {
+            mix_rgb(fg, Rgb { r: 0, g: 0, b: 0 }, mid)
+        };
+        let cand_lum = relative_luminance(candidate);
+        let cand_ratio = contrast_ratio(cand_lum, bg_lum);
+        if cand_ratio >= MIN_CONTRAST_RATIO {
+            best = candidate;
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+
+    best
+}
+
+fn relative_luminance(rgb: Rgb) -> f32 {
+    let r = srgb_component_to_linear(rgb.r);
+    let g = srgb_component_to_linear(rgb.g);
+    let b = srgb_component_to_linear(rgb.b);
+    0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+fn srgb_component_to_linear(value: u8) -> f32 {
+    let v = f32::from(value) / 255.0;
+    if v <= 0.04045 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn contrast_ratio(lum1: f32, lum2: f32) -> f32 {
+    let (lighter, darker) = if lum1 > lum2 {
+        (lum1, lum2)
+    } else {
+        (lum2, lum1)
+    };
+    (lighter + 0.05) / (darker + 0.05)
+}
+
+fn mix_rgb(a: Rgb, b: Rgb, t: f32) -> Rgb {
+    Rgb {
+        r: ((f32::from(a.r) * (1.0 - t) + f32::from(b.r) * t).round()).clamp(0.0, 255.0) as u8,
+        g: ((f32::from(a.g) * (1.0 - t) + f32::from(b.g) * t).round()).clamp(0.0, 255.0) as u8,
+        b: ((f32::from(a.b) * (1.0 - t) + f32::from(b.b) * t).round()).clamp(0.0, 255.0) as u8,
     }
 }
 

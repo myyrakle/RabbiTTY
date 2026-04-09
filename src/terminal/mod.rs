@@ -1,6 +1,6 @@
 mod engine;
 pub mod font;
-mod theme;
+pub mod theme;
 
 pub use engine::TerminalEngine;
 pub use theme::TerminalTheme;

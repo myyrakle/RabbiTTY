@@ -15,6 +15,7 @@ pub mod ui;
 pub struct TerminalFontOption {
     pub label: String,
     pub value: String,
+    pub monospaced: bool,
 }
 
 impl fmt::Display for TerminalFontOption {
@@ -31,6 +32,7 @@ pub enum SettingsField {
     TerminalFontSize,
     TerminalPaddingX,
     TerminalPaddingY,
+    ThemeColorScheme,
     ThemeForeground,
     ThemeBackground,
     ThemeCursor,
@@ -145,6 +147,7 @@ pub struct SettingsDraft {
     pub terminal_font_size: String,
     pub terminal_padding_x: String,
     pub terminal_padding_y: String,
+    pub color_scheme: String,
     pub foreground: String,
     pub background: String,
     pub cursor: String,
@@ -170,6 +173,7 @@ impl SettingsDraft {
             terminal_font_size: format!("{:.1}", config.terminal.font_size),
             terminal_padding_x: format!("{:.1}", config.terminal.padding_x),
             terminal_padding_y: format!("{:.1}", config.terminal.padding_y),
+            color_scheme: config.theme.color_scheme.clone(),
             foreground: format_rgb(config.theme.foreground),
             background: format_rgb(config.theme.background),
             cursor: format_rgb(config.theme.cursor),
@@ -219,6 +223,14 @@ impl SettingsDraft {
             SettingsField::TerminalFontSize => self.terminal_font_size = value,
             SettingsField::TerminalPaddingX => self.terminal_padding_x = value,
             SettingsField::TerminalPaddingY => self.terminal_padding_y = value,
+            SettingsField::ThemeColorScheme => {
+                self.color_scheme = value.clone();
+                if let Some(preset) = crate::terminal::theme::find_preset(&value) {
+                    self.foreground = format_rgb(preset.fg);
+                    self.background = format_rgb(preset.bg);
+                    self.cursor = format_rgb(preset.cursor);
+                }
+            }
             SettingsField::ThemeForeground => self.foreground = value,
             SettingsField::ThemeBackground => self.background = value,
             SettingsField::ThemeCursor => self.cursor = value,
@@ -240,6 +252,8 @@ impl SettingsDraft {
     }
 
     pub fn to_updates(&self) -> AppConfigUpdates {
+        let ansi_colors = crate::terminal::theme::find_preset(&self.color_scheme).map(|p| p.ansi);
+
         let mut updates = AppConfigUpdates {
             window_width: parse_f32(&self.window_width),
             window_height: parse_f32(&self.window_height),
@@ -247,9 +261,11 @@ impl SettingsDraft {
             terminal_font_size: parse_f32(&self.terminal_font_size),
             terminal_padding_x: parse_f32(&self.terminal_padding_x),
             terminal_padding_y: parse_f32(&self.terminal_padding_y),
+            color_scheme: Some(self.color_scheme.clone()),
             foreground: parse_hex_color(&self.foreground),
             background: parse_hex_color(&self.background),
             cursor: parse_hex_color(&self.cursor),
+            ansi_colors,
             background_opacity: parse_f32(&self.background_opacity),
             blur_enabled: Some(self.blur_enabled),
             macos_blur_alpha: parse_f32(&self.macos_blur_alpha),
@@ -289,11 +305,24 @@ pub fn view_category<'a>(
     category: SettingsCategory,
     config: &'a AppConfig,
     draft: &'a SettingsDraft,
-    terminal_font_options: &'a [TerminalFontOption],
+    font_combo_state: &'a iced::widget::combo_box::State<TerminalFontOption>,
+    show_all_fonts: bool,
+    all_font_options: &'a [TerminalFontOption],
 ) -> Element<'a, Message> {
     match category {
         SettingsCategory::Ui => ui::view(config, draft),
-        SettingsCategory::Terminal => terminal::view(config, draft, terminal_font_options),
+        SettingsCategory::Terminal => {
+            let selected_font = all_font_options
+                .iter()
+                .find(|o| o.value == draft.terminal_font_selection);
+            terminal::view(
+                config,
+                draft,
+                font_combo_state,
+                show_all_fonts,
+                selected_font,
+            )
+        }
         SettingsCategory::Theme => theme::view(config, draft),
         SettingsCategory::Shortcuts => shortcuts::view(config, draft),
         SettingsCategory::Ssh => ssh::view(draft),
@@ -338,6 +367,7 @@ pub fn input_row_with_suffix<'a>(
     .into()
 }
 
+#[allow(dead_code)]
 pub fn color_input_row<'a>(
     label: &'a str,
     value: &'a str,
@@ -463,6 +493,51 @@ where
         .on_input(on_input)
         .padding([6, 10])
         .width(Length::Fill)
+        .style(move |_theme: &iced::Theme, status: text_input::Status| {
+            let focused = matches!(status, text_input::Status::Focused { .. });
+            text_input::Style {
+                background: Background::Color(Color {
+                    a: 0.35,
+                    ..palette.background
+                }),
+                border: Border {
+                    radius: RADIUS_SMALL.into(),
+                    width: 1.0,
+                    color: if focused {
+                        Color {
+                            a: 0.5,
+                            ..palette.accent
+                        }
+                    } else {
+                        Color {
+                            a: 0.12,
+                            ..palette.text
+                        }
+                    },
+                },
+                icon: palette.text_secondary,
+                placeholder: palette.text_secondary,
+                value: palette.text,
+                selection: Color {
+                    a: 0.3,
+                    ..palette.accent
+                },
+            }
+        })
+}
+
+pub fn styled_text_input_small<'a, F>(
+    value: &'a str,
+    on_input: F,
+) -> text_input::TextInput<'a, Message>
+where
+    F: 'a + Fn(String) -> Message,
+{
+    let palette = Palette::DARK;
+    text_input("", value)
+        .on_input(on_input)
+        .padding([4, 8])
+        .width(Length::Fixed(100.0))
         .style(move |_theme: &iced::Theme, status: text_input::Status| {
             let focused = matches!(status, text_input::Status::Focused { .. });
             text_input::Style {

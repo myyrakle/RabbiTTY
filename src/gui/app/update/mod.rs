@@ -3,7 +3,7 @@ mod tab;
 mod terminal;
 
 use super::{App, Message, SETTINGS_TAB_INDEX};
-use crate::gui::settings::SettingsDraft;
+use crate::gui::settings::{SettingsDraft, SettingsField};
 use crate::gui::tab::ShellKind;
 use iced::keyboard::{Key, key::Named};
 use iced::{Task, widget, window};
@@ -88,6 +88,18 @@ impl App {
             }
             Message::SettingsBlurToggled(enabled) => {
                 self.settings_draft.blur_enabled = enabled;
+            }
+            Message::FontSelected(option) => {
+                self.settings_draft
+                    .update(SettingsField::TerminalFontSelection, option.value);
+            }
+            Message::ToggleShowAllFonts(show_all) => {
+                self.show_all_fonts = show_all;
+                self.font_combo_state = super::build_font_combo_state(
+                    &self.all_font_options,
+                    show_all,
+                    self.config.terminal.font_selection.as_deref(),
+                );
             }
             Message::ApplySettings => {
                 return self.apply_settings(false);

@@ -1,4 +1,4 @@
-use super::theme::{resolve_rgb, rgb_to_rgba};
+use super::theme::{enforce_min_contrast, resolve_rgb, rgb_to_rgba};
 use super::{CellVisual, TerminalSize, TerminalTheme};
 use alacritty_terminal::event::{Event, EventListener, WindowSize};
 use alacritty_terminal::grid::Dimensions;
@@ -183,6 +183,8 @@ impl TerminalEngine {
                     if indexed.cell.flags.contains(Flags::INVERSE) {
                         std::mem::swap(&mut fg_rgb, &mut bg_rgb);
                     }
+
+                    fg_rgb = enforce_min_contrast(fg_rgb, bg_rgb);
 
                     let mut fg = rgb_to_rgba(fg_rgb, 1.0);
                     let bg = rgb_to_rgba(bg_rgb, self.theme.background_opacity);

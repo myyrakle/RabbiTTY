@@ -4,19 +4,16 @@ use crate::gui::settings::{
     SettingsDraft, SettingsField, TerminalFontOption, hint_text, input_row_with_suffix, section,
 };
 use crate::gui::theme::SPACING_NORMAL;
-use iced::widget::{column, pick_list, row, text};
+use iced::widget::{checkbox, column, combo_box, row, text};
 use iced::{Alignment, Element, Length};
 
 pub fn view<'a>(
     _config: &'a AppConfig,
     draft: &'a SettingsDraft,
-    terminal_font_options: &'a [TerminalFontOption],
+    font_combo_state: &'a combo_box::State<TerminalFontOption>,
+    show_all_fonts: bool,
+    selected_font: Option<&'a TerminalFontOption>,
 ) -> Element<'a, Message> {
-    let selected_font = terminal_font_options
-        .iter()
-        .find(|option| option.value == draft.terminal_font_selection)
-        .cloned();
-
     let font_section = section(
         "Font",
         column(vec![
@@ -28,20 +25,31 @@ pub fn view<'a>(
             ),
             row![
                 text("Font family").size(13).width(Length::Fixed(160.0)),
-                pick_list(terminal_font_options, selected_font, |option| {
-                    Message::SettingsInputChanged(
-                        SettingsField::TerminalFontSelection,
-                        option.value,
-                    )
-                })
-                .placeholder("Select terminal font")
+                combo_box(
+                    font_combo_state,
+                    "Search fonts...",
+                    selected_font,
+                    Message::FontSelected,
+                )
                 .width(Length::Fill),
             ]
             .align_y(Alignment::Center)
             .spacing(SPACING_NORMAL)
             .width(Length::Fill)
             .into(),
-            hint_text("Monospaced fonts are recommended for terminal text."),
+            row![
+                checkbox(show_all_fonts)
+                    .label("Show all fonts")
+                    .on_toggle(Message::ToggleShowAllFonts)
+                    .size(14)
+                    .text_size(13),
+            ]
+            .into(),
+            hint_text(if draft.terminal_font_selection.is_empty() {
+                "Using bundled DejaVu Sans Mono."
+            } else {
+                "Monospaced fonts are recommended for terminal text."
+            }),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)

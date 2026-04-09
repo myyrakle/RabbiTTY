@@ -8,6 +8,7 @@ use crate::terminal::font::discover_system_terminal_fonts;
 use iced::Size;
 use iced::futures::channel::mpsc;
 use iced::keyboard::{Key, Modifiers};
+use iced::widget::combo_box;
 
 mod shortcuts;
 mod subscription;
@@ -57,6 +58,9 @@ pub enum Message {
     WindowResized(Size),
     ApplyWindowStyle,
 
+    FontSelected(TerminalFontOption),
+    ToggleShowAllFonts(bool),
+
     #[cfg(target_os = "windows")]
     WindowMinimize,
     #[cfg(target_os = "windows")]
@@ -75,7 +79,9 @@ pub struct App {
     pub(super) settings_open: bool,
     pub(super) settings_category: SettingsCategory,
     pub(super) settings_draft: SettingsDraft,
-    pub(super) terminal_font_options: Vec<TerminalFontOption>,
+    pub(super) font_combo_state: combo_box::State<TerminalFontOption>,
+    pub(super) show_all_fonts: bool,
+    pub(super) all_font_options: Vec<TerminalFontOption>,
     pub(super) available_shells: Vec<ShellKind>,
     pub(super) config: AppConfig,
     pub(super) pty_sender: Option<mpsc::Sender<OutputEvent>>,
@@ -93,6 +99,13 @@ pub struct App {
 
 impl App {
     pub fn new(config: AppConfig) -> Self {
+        let all_font_options = build_all_font_options(config.terminal.font_selection.as_deref());
+        let show_all_fonts = false;
+        let font_combo_state = build_font_combo_state(
+            &all_font_options,
+            show_all_fonts,
+            config.terminal.font_selection.as_deref(),
+        );
         Self {
             tabs: vec![],
             active_tab: 0,
@@ -102,9 +115,9 @@ impl App {
             settings_open: false,
             settings_category: SettingsCategory::Ui,
             settings_draft: SettingsDraft::from_config(&config),
-            terminal_font_options: build_terminal_font_options(
-                config.terminal.font_selection.as_deref(),
-            ),
+            font_combo_state,
+            show_all_fonts,
+            all_font_options,
             available_shells: discover_available_shells(),
             config,
             pty_sender: None,
@@ -176,21 +189,27 @@ pub(super) fn srgb_u8_to_linear(value: u8) -> f32 {
     }
 }
 
-fn build_terminal_font_options(selected: Option<&str>) -> Vec<TerminalFontOption> {
+/// Build the full list of font options (monospaced + proportional).
+fn build_all_font_options(selected: Option<&str>) -> Vec<TerminalFontOption> {
     let mut options = Vec::new();
     options.push(TerminalFontOption {
         label: "DejaVu Sans Mono (Bundled)".to_string(),
         value: String::new(),
+        monospaced: true,
     });
 
-    options.extend(
-        discover_system_terminal_fonts()
-            .into_iter()
-            .map(|family| TerminalFontOption {
-                label: family.clone(),
-                value: family,
-            }),
-    );
+    options.extend(discover_system_terminal_fonts().into_iter().map(|sf| {
+        let label = if sf.monospaced {
+            sf.family.clone()
+        } else {
+            format!("{} (Proportional)", sf.family)
+        };
+        TerminalFontOption {
+            label,
+            value: sf.family,
+            monospaced: sf.monospaced,
+        }
+    }));
 
     if let Some(value) = selected.map(str::trim).filter(|value| !value.is_empty())
         && !options.iter().any(|option| option.value == value)
@@ -198,8 +217,28 @@ fn build_terminal_font_options(selected: Option<&str>) -> Vec<TerminalFontOption
         options.push(TerminalFontOption {
             label: format!("{value} (Legacy)"),
             value: value.to_string(),
+            monospaced: true,
         });
     }
 
     options
+}
+
+/// Build combo_box state from the font options, filtered by show_all flag.
+fn build_font_combo_state(
+    all: &[TerminalFontOption],
+    show_all: bool,
+    selected_value: Option<&str>,
+) -> combo_box::State<TerminalFontOption> {
+    let filtered: Vec<TerminalFontOption> = if show_all {
+        all.to_vec()
+    } else {
+        all.iter().filter(|o| o.monospaced).cloned().collect()
+    };
+    let selection_idx = selected_value
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .and_then(|v| filtered.iter().position(|o| o.value == v));
+    let selection = selection_idx.map(|i| &filtered[i]);
+    combo_box::State::with_selection(filtered.clone(), selection)
 }

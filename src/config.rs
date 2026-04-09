@@ -97,9 +97,11 @@ pub struct TerminalConfig {
 
 #[derive(Debug, Clone)]
 pub struct ThemeConfig {
+    pub color_scheme: String,
     pub foreground: [u8; 3],
     pub background: [u8; 3],
     pub cursor: [u8; 3],
+    pub ansi_colors: Option<[[u8; 3]; 16]>,
     pub background_opacity: f32,
     pub blur_enabled: bool,
     pub macos_blur_material: String,
@@ -154,9 +156,11 @@ struct TerminalFileConfig {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ThemeFileConfig {
+    color_scheme: Option<String>,
     foreground: Option<String>,
     background: Option<String>,
     cursor: Option<String>,
+    ansi_colors: Option<Vec<String>>,
     background_opacity: Option<f32>,
     blur_enabled: Option<bool>,
     macos_blur_material: Option<String>,
@@ -181,9 +185,11 @@ pub struct AppConfigUpdates {
     pub terminal_font_size: Option<f32>,
     pub terminal_padding_x: Option<f32>,
     pub terminal_padding_y: Option<f32>,
+    pub color_scheme: Option<String>,
     pub foreground: Option<[u8; 3]>,
     pub background: Option<[u8; 3]>,
     pub cursor: Option<[u8; 3]>,
+    pub ansi_colors: Option<[[u8; 3]; 16]>,
     pub background_opacity: Option<f32>,
     pub blur_enabled: Option<bool>,
     pub macos_blur_material: Option<String>,
@@ -213,9 +219,11 @@ impl Default for AppConfig {
                 padding_y: DEFAULT_TERMINAL_PADDING_Y,
             },
             theme: ThemeConfig {
+                color_scheme: "Catppuccin Mocha".to_string(),
                 foreground: DEFAULT_THEME_FOREGROUND,
                 background: DEFAULT_THEME_BACKGROUND,
                 cursor: DEFAULT_THEME_CURSOR,
+                ansi_colors: None,
                 background_opacity: DEFAULT_THEME_BG_OPACITY,
                 blur_enabled: DEFAULT_BLUR_ENABLED,
                 macos_blur_material: DEFAULT_MACOS_BLUR_MATERIAL.to_string(),
@@ -255,24 +263,30 @@ impl AppConfig {
         if let Some(height) = updates.window_height {
             self.ui.window_height = sanitize_positive(height, self.ui.window_height);
         }
+        let old_font = self.terminal.font_selection.clone();
         if let Some(selection) = updates.terminal_font_selection {
             self.terminal.font_selection = sanitize_terminal_font_selection(&selection);
         }
         if let Some(size) = updates.terminal_font_size {
-            let new_size = sanitize_terminal_font_size(size, self.terminal.font_size);
-            if (new_size - self.terminal.font_size).abs() > 0.01 {
-                self.terminal.font_size = new_size;
-                // Recalculate cell dimensions to match new font size
-                let (cw, ch) = cell_metrics_for_font_size(new_size);
-                self.terminal.cell_width = cw;
-                self.terminal.cell_height = ch;
-            }
+            self.terminal.font_size = sanitize_terminal_font_size(size, self.terminal.font_size);
+        }
+        // Recalculate cell metrics if font or size changed
+        if self.terminal.font_selection != old_font || updates.terminal_font_size.is_some() {
+            let (cw, ch) = cell_metrics_for_selection(
+                self.terminal.font_selection.as_deref(),
+                self.terminal.font_size,
+            );
+            self.terminal.cell_width = cw;
+            self.terminal.cell_height = ch;
         }
         if let Some(px) = updates.terminal_padding_x {
             self.terminal.padding_x = sanitize_padding(px);
         }
         if let Some(py) = updates.terminal_padding_y {
             self.terminal.padding_y = sanitize_padding(py);
+        }
+        if let Some(scheme) = updates.color_scheme {
+            self.theme.color_scheme = scheme;
         }
         if let Some(foreground) = updates.foreground {
             self.theme.foreground = foreground;
@@ -282,6 +296,9 @@ impl AppConfig {
         }
         if let Some(cursor) = updates.cursor {
             self.theme.cursor = cursor;
+        }
+        if let Some(ansi) = updates.ansi_colors {
+            self.theme.ansi_colors = Some(ansi);
         }
         if let Some(opacity) = updates.background_opacity {
             self.theme.background_opacity =
@@ -353,8 +370,11 @@ impl AppConfig {
                     sanitize_terminal_font_size(size, self.terminal.font_size);
             }
 
-            // Cell dimensions always derived from font_size
-            let (cw, ch) = cell_metrics_for_font_size(self.terminal.font_size);
+            // Cell dimensions derived from selected font + size
+            let (cw, ch) = cell_metrics_for_selection(
+                self.terminal.font_selection.as_deref(),
+                self.terminal.font_size,
+            );
             self.terminal.cell_width = cw;
             self.terminal.cell_height = ch;
 
@@ -367,6 +387,22 @@ impl AppConfig {
         }
 
         if let Some(theme) = file.theme {
+            if let Some(scheme) = theme
+                .color_scheme
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                self.theme.color_scheme = scheme.to_string();
+                // If a known preset, apply its colors as base
+                if let Some(preset) = crate::terminal::theme::find_preset(scheme) {
+                    self.theme.foreground = preset.fg;
+                    self.theme.background = preset.bg;
+                    self.theme.cursor = preset.cursor;
+                    self.theme.ansi_colors = Some(preset.ansi);
+                }
+            }
+            // Explicit colors override preset
             if let Some(foreground) = theme.foreground.as_deref().and_then(parse_hex_color) {
                 self.theme.foreground = foreground;
             }
@@ -375,6 +411,16 @@ impl AppConfig {
             }
             if let Some(cursor) = theme.cursor.as_deref().and_then(parse_hex_color) {
                 self.theme.cursor = cursor;
+            }
+            if let Some(ansi) = theme.ansi_colors.as_ref() {
+                let parsed: Vec<_> = ansi.iter().filter_map(|s| parse_hex_color(s)).collect();
+                if parsed.len() == 16 {
+                    let mut arr = [[0u8; 3]; 16];
+                    for (i, c) in parsed.into_iter().enumerate() {
+                        arr[i] = c;
+                    }
+                    self.theme.ansi_colors = Some(arr);
+                }
             }
             if let Some(opacity) = theme.background_opacity {
                 self.theme.background_opacity =
@@ -642,6 +688,11 @@ impl From<&AppConfig> for FileConfig {
                 padding_y: Some(config.terminal.padding_y),
             }),
             theme: Some(ThemeFileConfig {
+                color_scheme: if config.theme.color_scheme.is_empty() {
+                    None
+                } else {
+                    Some(config.theme.color_scheme.clone())
+                },
                 foreground: Some(format!(
                     "#{:02x}{:02x}{:02x}",
                     config.theme.foreground[0],
@@ -658,6 +709,11 @@ impl From<&AppConfig> for FileConfig {
                     "#{:02x}{:02x}{:02x}",
                     config.theme.cursor[0], config.theme.cursor[1], config.theme.cursor[2]
                 )),
+                ansi_colors: config.theme.ansi_colors.map(|ansi| {
+                    ansi.iter()
+                        .map(|c| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]))
+                        .collect()
+                }),
                 background_opacity: Some(config.theme.background_opacity),
                 blur_enabled: Some(config.theme.blur_enabled),
                 macos_blur_material: Some(config.theme.macos_blur_material.clone()),
@@ -713,7 +769,7 @@ fn ensure_config_file(path: &Path) -> std::io::Result<()> {
 
 fn default_config_toml() -> String {
     format!(
-        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\nfont_selection = \"\"\nfont_size = {font_size:.1}\npadding_x = {padding_x:.1}\npadding_y = {padding_y:.1}\n\n[theme]\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_material = \"{macos_blur_material}\"\nmacos_blur_alpha = {macos_blur_alpha:.2}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\n",
+        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\nfont_selection = \"\"\nfont_size = {font_size:.1}\npadding_x = {padding_x:.1}\npadding_y = {padding_y:.1}\n\n[theme]\ncolor_scheme = \"Catppuccin Mocha\"\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_material = \"{macos_blur_material}\"\nmacos_blur_alpha = {macos_blur_alpha:.2}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\n",
         width = DEFAULT_WINDOW_WIDTH as u32,
         height = DEFAULT_WINDOW_HEIGHT as u32,
         font_size = DEFAULT_TERMINAL_FONT_SIZE,
@@ -743,6 +799,24 @@ fn default_config_toml() -> String {
 
 pub fn cell_metrics_for_font_size(font_size: f32) -> (f32, f32) {
     let font = FontArc::try_from_slice(DEJAVU_SANS_MONO).expect("font load failed");
+    cell_metrics_for_font_arc(&font, font_size)
+}
+
+/// Calculate cell metrics using a specific font selection.
+/// If `font_selection` is empty or the font can't be loaded, falls back to bundled font.
+pub fn cell_metrics_for_selection(font_selection: Option<&str>, font_size: f32) -> (f32, f32) {
+    let font = font_selection
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .and_then(crate::terminal::font::load_system_font_by_family);
+
+    match font {
+        Some(ref f) => cell_metrics_for_font_arc(f, font_size),
+        None => cell_metrics_for_font_size(font_size),
+    }
+}
+
+fn cell_metrics_for_font_arc(font: &FontArc, font_size: f32) -> (f32, f32) {
     let scale = PxScale::from(font_size);
     let scaled = font.as_scaled(scale);
     let ascent = scaled.ascent();
@@ -772,20 +846,21 @@ pub fn cell_metrics_for_font_size(font_size: f32) -> (f32, f32) {
         scaled.height().max(1.0)
     };
 
-    let mut advance: f32 = 0.0;
-    for ch in ['M', 'W', '0', ' '].into_iter() {
-        let candidate = scaled.h_advance(font.glyph_id(ch));
-        if candidate > 0.0 {
-            advance = candidate;
-            break;
+    // For proportional fonts, use max advance across ASCII printable range
+    // For monospaced fonts, all advances are the same
+    let mut max_advance: f32 = 0.0;
+    for code in 32u8..=126u8 {
+        let candidate = scaled.h_advance(font.glyph_id(code as char));
+        if candidate > max_advance {
+            max_advance = candidate;
         }
     }
-    if advance <= 0.0 {
-        advance = (line_height * 0.6).max(1.0);
+    if max_advance <= 0.0 {
+        max_advance = (line_height * 0.6).max(1.0);
     }
 
     let cell_height = (font_size / FONT_SCALE_FACTOR).max(1.0);
-    let cell_width = advance.max(1.0);
+    let cell_width = max_advance.max(1.0);
     (cell_width, cell_height)
 }
 

@@ -86,11 +86,25 @@ fn text_vs_main(input : TextVertexIn) -> TextVertexOut {
     return out;
 }
 
-// Single-pass subpixel: blend fg/bg per channel using known background color
+// Convert linear RGB to approximate sRGB (sqrt approximation of gamma 2.2)
+fn linear_to_srgb(c : vec3<f32>) -> vec3<f32> {
+    return sqrt(max(c, vec3<f32>(0.0)));
+}
+
+// Convert approximate sRGB back to linear
+fn srgb_to_linear(c : vec3<f32>) -> vec3<f32> {
+    return c * c;
+}
+
+// Single-pass subpixel: blend fg/bg in sRGB space for perceptually correct text
 @fragment
 fn text_fs_subpixel(input : TextVertexOut) -> @location(0) vec4<f32> {
     let cov = textureSample(text_atlas, text_sampler, input.uv);
-    let blended = input.bg_color.rgb * (1.0 - cov.rgb) + input.color.rgb * cov.rgb;
+    // Blend in sRGB (gamma) space so text edges look bold and vivid
+    let bg_srgb = linear_to_srgb(input.bg_color.rgb);
+    let fg_srgb = linear_to_srgb(input.color.rgb);
+    let blended_srgb = bg_srgb * (1.0 - cov.rgb) + fg_srgb * cov.rgb;
+    let blended = srgb_to_linear(blended_srgb);
     let alpha = max(cov.r, max(cov.g, cov.b));
     return vec4<f32>(blended, mix(input.bg_color.a, input.color.a, alpha));
 }
