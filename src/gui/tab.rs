@@ -3,6 +3,7 @@ use crate::session::{LaunchSpec, OutputEvent, Session, SessionError};
 use crate::terminal::{CellVisual, Selection, TerminalEngine, TerminalSize, TerminalTheme};
 use iced::futures::channel::mpsc;
 use iced::keyboard::{Key, Modifiers, key::Named};
+use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::path::Path;
@@ -171,46 +172,51 @@ impl TerminalTab {
         }
     }
 
-    fn key_to_bytes(&self, key: &Key, modifiers: Modifiers, text: Option<&str>) -> Option<Vec<u8>> {
+    fn key_to_bytes<'a>(
+        &self,
+        key: &Key,
+        modifiers: Modifiers,
+        text: Option<&'a str>,
+    ) -> Option<Cow<'a, [u8]>> {
         match key {
             Key::Named(named) => match named {
-                Named::Enter => Some(b"\r".to_vec()),
-                Named::Backspace => Some(b"\x7f".to_vec()),
+                Named::Enter => Some(Cow::Borrowed(b"\r")),
+                Named::Backspace => Some(Cow::Borrowed(b"\x7f")),
                 Named::Tab => {
                     if modifiers.shift() {
-                        Some(b"\x1b[Z".to_vec())
+                        Some(Cow::Borrowed(b"\x1b[Z"))
                     } else {
-                        Some(b"\t".to_vec())
+                        Some(Cow::Borrowed(b"\t"))
                     }
                 }
-                Named::Escape => Some(b"\x1b".to_vec()),
-                Named::ArrowUp => Some(b"\x1b[A".to_vec()),
-                Named::ArrowDown => Some(b"\x1b[B".to_vec()),
-                Named::ArrowRight => Some(b"\x1b[C".to_vec()),
-                Named::ArrowLeft => Some(b"\x1b[D".to_vec()),
-                Named::Home => Some(b"\x1b[H".to_vec()),
-                Named::End => Some(b"\x1b[F".to_vec()),
-                Named::Delete => Some(b"\x1b[3~".to_vec()),
-                Named::PageUp => Some(b"\x1b[5~".to_vec()),
-                Named::PageDown => Some(b"\x1b[6~".to_vec()),
-                Named::Insert => Some(b"\x1b[2~".to_vec()),
-                Named::F1 => Some(b"\x1bOP".to_vec()),
-                Named::F2 => Some(b"\x1bOQ".to_vec()),
-                Named::F3 => Some(b"\x1bOR".to_vec()),
-                Named::F4 => Some(b"\x1bOS".to_vec()),
-                Named::F5 => Some(b"\x1b[15~".to_vec()),
-                Named::F6 => Some(b"\x1b[17~".to_vec()),
-                Named::F7 => Some(b"\x1b[18~".to_vec()),
-                Named::F8 => Some(b"\x1b[19~".to_vec()),
-                Named::F9 => Some(b"\x1b[20~".to_vec()),
-                Named::F10 => Some(b"\x1b[21~".to_vec()),
-                Named::F11 => Some(b"\x1b[23~".to_vec()),
-                Named::F12 => Some(b"\x1b[24~".to_vec()),
+                Named::Escape => Some(Cow::Borrowed(b"\x1b")),
+                Named::ArrowUp => Some(Cow::Borrowed(b"\x1b[A")),
+                Named::ArrowDown => Some(Cow::Borrowed(b"\x1b[B")),
+                Named::ArrowRight => Some(Cow::Borrowed(b"\x1b[C")),
+                Named::ArrowLeft => Some(Cow::Borrowed(b"\x1b[D")),
+                Named::Home => Some(Cow::Borrowed(b"\x1b[H")),
+                Named::End => Some(Cow::Borrowed(b"\x1b[F")),
+                Named::Delete => Some(Cow::Borrowed(b"\x1b[3~")),
+                Named::PageUp => Some(Cow::Borrowed(b"\x1b[5~")),
+                Named::PageDown => Some(Cow::Borrowed(b"\x1b[6~")),
+                Named::Insert => Some(Cow::Borrowed(b"\x1b[2~")),
+                Named::F1 => Some(Cow::Borrowed(b"\x1bOP")),
+                Named::F2 => Some(Cow::Borrowed(b"\x1bOQ")),
+                Named::F3 => Some(Cow::Borrowed(b"\x1bOR")),
+                Named::F4 => Some(Cow::Borrowed(b"\x1bOS")),
+                Named::F5 => Some(Cow::Borrowed(b"\x1b[15~")),
+                Named::F6 => Some(Cow::Borrowed(b"\x1b[17~")),
+                Named::F7 => Some(Cow::Borrowed(b"\x1b[18~")),
+                Named::F8 => Some(Cow::Borrowed(b"\x1b[19~")),
+                Named::F9 => Some(Cow::Borrowed(b"\x1b[20~")),
+                Named::F10 => Some(Cow::Borrowed(b"\x1b[21~")),
+                Named::F11 => Some(Cow::Borrowed(b"\x1b[23~")),
+                Named::F12 => Some(Cow::Borrowed(b"\x1b[24~")),
                 Named::Space => {
                     if modifiers.control() {
-                        Some(vec![0])
+                        Some(Cow::Borrowed(b"\0"))
                     } else {
-                        Some(b" ".to_vec())
+                        Some(Cow::Borrowed(b" "))
                     }
                 }
                 _ => None,
@@ -219,13 +225,13 @@ impl TerminalTab {
             Key::Character(c) if modifiers.control() => c.chars().next().and_then(|ch| {
                 let upper = ch.to_ascii_uppercase();
                 if upper.is_ascii_alphabetic() {
-                    Some(vec![(upper as u8) - b'A' + 1])
+                    Some(Cow::Owned(vec![(upper as u8) - b'A' + 1]))
                 } else {
                     None
                 }
             }),
 
-            Key::Character(_) => text.map(|t| t.as_bytes().to_vec()),
+            Key::Character(_) => text.map(|t| Cow::Borrowed(t.as_bytes())),
             _ => None,
         }
     }

@@ -79,15 +79,15 @@ impl ShaderProgram<Message> for TerminalProgram {
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 if state.dragging
                     && let (Some(start), Some(pos)) = (state.drag_start, cursor.position_in(bounds))
-                    {
-                        let end = self.pixel_to_grid(pos, bounds);
-                        if start != end {
-                            let sel = Selection { start, end };
-                            return Some(
-                                Action::publish(Message::SelectionChanged(Some(sel))).and_capture(),
-                            );
-                        }
+                {
+                    let end = self.pixel_to_grid(pos, bounds);
+                    if start != end {
+                        let sel = Selection { start, end };
+                        return Some(
+                            Action::publish(Message::SelectionChanged(Some(sel))).and_capture(),
+                        );
                     }
+                }
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 if state.dragging {
@@ -227,45 +227,23 @@ impl Primitive for TerminalPrimitive {
         pipeline.last_font_size = font_size;
         pipeline.last_selection = self.selection;
 
-        // Apply selection highlight to cells
-        let cells_modified;
-        let cells_slice = if let Some(ref sel) = self.selection {
-            cells_modified = self
-                .cells
-                .iter()
-                .map(|cell| {
-                    if sel.contains(cell.row, cell.col) {
-                        CellVisual {
-                            bg: SELECTION_BG,
-                            ..*cell
-                        }
-                    } else {
-                        *cell
-                    }
-                })
-                .collect::<Vec<_>>();
-            &cells_modified
-        } else {
-            self.cells.as_slice()
-        };
+        let cells = self.cells.as_slice();
 
-        {
-            pipeline
-                .bg
-                .update_uniforms(queue, cell_size, viewport, offset);
-            pipeline.bg.prepare_instances(device, queue, cells_slice);
-        }
+        pipeline
+            .bg
+            .update_uniforms(queue, cell_size, viewport, offset);
+        pipeline
+            .bg
+            .prepare_instances(device, queue, cells, self.selection.as_ref());
 
-        {
-            pipeline
-                .text
-                .apply_terminal_font_selection(device, self.terminal_font_selection.as_deref());
-            pipeline.text.set_requested_font_size(font_size);
-            pipeline.text.update_uniforms(queue, viewport, offset);
-            pipeline
-                .text
-                .prepare_instances(device, queue, cells_slice, cell_size);
-        }
+        pipeline
+            .text
+            .apply_terminal_font_selection(device, self.terminal_font_selection.as_deref());
+        pipeline.text.set_requested_font_size(font_size);
+        pipeline.text.update_uniforms(queue, viewport, offset);
+        pipeline
+            .text
+            .prepare_instances(device, queue, cells, cell_size);
     }
 
     fn render(

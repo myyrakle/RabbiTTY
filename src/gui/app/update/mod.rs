@@ -137,9 +137,10 @@ impl App {
             }
             Message::SelectionChanged(sel) => {
                 if self.active_tab != SETTINGS_TAB_INDEX
-                    && let Some(tab) = self.tabs.get_mut(self.active_tab) {
-                        tab.selection = sel;
-                    }
+                    && let Some(tab) = self.tabs.get_mut(self.active_tab)
+                {
+                    tab.selection = sel;
+                }
             }
             Message::PasteClipboard(text) => {
                 if !text.is_empty()
@@ -233,11 +234,12 @@ impl App {
         // Copy: Cmd+C (macOS) / Ctrl+Shift+C (other)
         if is_copy_shortcut(&key, modifiers)
             && let Some(tab) = self.tabs.get_mut(self.active_tab)
-                && let Some(text) = tab.selected_text() {
-                    tab.clear_selection();
-                    return iced::clipboard::write(text);
-                }
-            // No selection → fall through to send Ctrl+C to terminal
+            && let Some(text) = tab.selected_text()
+        {
+            tab.clear_selection();
+            return iced::clipboard::write(text);
+        }
+        // No selection → fall through to send Ctrl+C to terminal
 
         // Paste: Cmd+V (macOS) / Ctrl+Shift+V (other)
         if is_paste_shortcut(&key, modifiers) {
@@ -284,22 +286,24 @@ impl App {
 
 fn is_copy_shortcut(key: &Key, modifiers: iced::keyboard::Modifiers) -> bool {
     if let Key::Character(c) = key
-        && c.eq_ignore_ascii_case("c") {
-            #[cfg(target_os = "macos")]
-            return modifiers.logo();
-            #[cfg(not(target_os = "macos"))]
-            return modifiers.ctrl() && modifiers.shift();
-        }
+        && c.eq_ignore_ascii_case("c")
+    {
+        #[cfg(target_os = "macos")]
+        return modifiers.logo();
+        #[cfg(not(target_os = "macos"))]
+        return modifiers.ctrl() && modifiers.shift();
+    }
     false
 }
 
 fn is_paste_shortcut(key: &Key, modifiers: iced::keyboard::Modifiers) -> bool {
     if let Key::Character(c) = key
-        && c.eq_ignore_ascii_case("v") {
-            #[cfg(target_os = "macos")]
-            return modifiers.logo();
-            #[cfg(not(target_os = "macos"))]
-            return modifiers.ctrl() && modifiers.shift();
-        }
+        && c.eq_ignore_ascii_case("v")
+    {
+        #[cfg(target_os = "macos")]
+        return modifiers.logo();
+        #[cfg(not(target_os = "macos"))]
+        return modifiers.ctrl() && modifiers.shift();
+    }
     false
 }

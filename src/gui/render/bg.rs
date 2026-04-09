@@ -1,4 +1,4 @@
-use crate::terminal::CellVisual;
+use crate::terminal::{CellVisual, Selection};
 use bytemuck::{Pod, Zeroable};
 use iced::wgpu::{self, util::DeviceExt};
 
@@ -172,15 +172,23 @@ impl BackgroundPipeline {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         cells: &[CellVisual],
+        selection: Option<&Selection>,
     ) {
         self.instances.clear();
         let needed = cells.len().saturating_sub(self.instances.capacity());
         if needed > 0 {
             self.instances.reserve(needed);
         }
-        self.instances.extend(cells.iter().map(|cell| InstanceRaw {
-            pos: [cell.col as u32, cell.row as u32],
-            color: cell.bg,
+        self.instances.extend(cells.iter().map(|cell| {
+            let bg = if selection.is_some_and(|s| s.contains(cell.row, cell.col)) {
+                super::SELECTION_BG
+            } else {
+                cell.bg
+            };
+            InstanceRaw {
+                pos: [cell.col as u32, cell.row as u32],
+                color: bg,
+            }
         }));
         let required = self.instances.len().max(1);
 
