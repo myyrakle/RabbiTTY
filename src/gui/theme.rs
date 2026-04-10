@@ -36,9 +36,9 @@ pub const RADIUS_NORMAL: f32 = 8.0;
 pub fn scrollbar_style(_theme: &iced::Theme, status: scrollable::Status) -> scrollable::Style {
     let palette = Palette::DARK;
     let scroller_alpha = match status {
-        scrollable::Status::Active { .. } => 0.3,
-        scrollable::Status::Hovered { .. } => 0.5,
-        scrollable::Status::Dragged { .. } => 0.7,
+        scrollable::Status::Active { .. } => 0.45,
+        scrollable::Status::Hovered { .. } => 0.65,
+        scrollable::Status::Dragged { .. } => 0.8,
     };
 
     let rail = |visible: bool| scrollable::Rail {

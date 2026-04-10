@@ -154,6 +154,22 @@ impl App {
                     tab.selection = sel;
                 }
             }
+            Message::TerminalMousePress { col, row } => {
+                if let Some(tab) = self.tabs.get(self.active_tab) {
+                    tab.send_mouse_event(0, col, row, true);
+                }
+            }
+            Message::TerminalMouseRelease { col, row } => {
+                if let Some(tab) = self.tabs.get(self.active_tab) {
+                    tab.send_mouse_event(0, col, row, false);
+                }
+            }
+            Message::TerminalMouseDrag { col, row } => {
+                if let Some(tab) = self.tabs.get(self.active_tab) {
+                    // Button 0 + 32 = motion flag for SGR drag reporting
+                    tab.send_mouse_event(32, col, row, true);
+                }
+            }
             Message::PasteClipboard(text) => {
                 if !text.is_empty()
                     && self.active_tab != SETTINGS_TAB_INDEX
@@ -172,14 +188,44 @@ impl App {
                     tab.scroll_to_relative(rel_y);
                 }
             }
-            Message::TerminalWheelScroll(delta) => {
+            Message::TerminalWheelScroll(raw_delta) => {
                 if self.active_tab != SETTINGS_TAB_INDEX
                     && let Some(tab) = self.tabs.get_mut(self.active_tab)
                 {
-                    tab.scroll(delta);
+                    if tab.mouse_mode() {
+                        self.scroll_accumulator += raw_delta;
+                        let lines = self.scroll_accumulator as i32;
+                        if lines != 0 {
+                            self.scroll_accumulator -= lines as f32;
+                            let button: u8 = if lines > 0 { 64 } else { 65 };
+                            for _ in 0..lines.unsigned_abs() {
+                                tab.send_mouse_event(button, 0, 0, true);
+                            }
+                        }
+                    } else if tab.alt_screen() {
+                        // Alt screen without mouse mode: convert scroll to arrow keys
+                        self.scroll_accumulator += raw_delta;
+                        let lines = self.scroll_accumulator as i32;
+                        if lines != 0 {
+                            self.scroll_accumulator -= lines as f32;
+                            tab.send_scroll_as_arrows(lines);
+                        }
+                    } else {
+                        self.scroll_accumulator = 0.0;
+                        let delta = raw_delta.round() as i32;
+                        if delta != 0 {
+                            tab.scroll(delta);
+                        }
+                    }
                 }
-                self.ignore_scrollable_sync = true;
-                return self.sync_terminal_scrollable_forced();
+                if self
+                    .tabs
+                    .get(self.active_tab)
+                    .is_some_and(|t| !t.mouse_mode() && !t.alt_screen())
+                {
+                    self.ignore_scrollable_sync = true;
+                    return self.sync_terminal_scrollable_forced();
+                }
             }
             Message::WindowResized(size) => {
                 self.handle_window_resized(size);

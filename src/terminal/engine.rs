@@ -4,7 +4,9 @@ use alacritty_terminal::event::{Event, EventListener, WindowSize};
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::grid::Scroll;
 use alacritty_terminal::term::cell::Flags;
-use alacritty_terminal::term::{Config as TermConfig, RenderableContent, Term, point_to_viewport};
+use alacritty_terminal::term::{
+    Config as TermConfig, RenderableContent, Term, TermMode, point_to_viewport,
+};
 use alacritty_terminal::vte::ansi::{CursorShape, Processor};
 use std::cell::{Cell, RefCell};
 use std::io::Write;
@@ -122,6 +124,21 @@ impl TerminalEngine {
     pub fn set_theme(&mut self, theme: TerminalTheme) {
         self.theme = theme;
         self.cache_dirty.set(true);
+    }
+
+    /// Returns true when the running program has enabled mouse reporting.
+    pub fn mouse_mode(&self) -> bool {
+        self.term.mode().intersects(TermMode::MOUSE_MODE)
+    }
+
+    /// Returns true when the program requests SGR-encoded mouse events.
+    pub fn sgr_mouse(&self) -> bool {
+        self.term.mode().contains(TermMode::SGR_MOUSE)
+    }
+
+    /// Returns true when the terminal is in the alternate screen buffer.
+    pub fn alt_screen(&self) -> bool {
+        self.term.mode().contains(TermMode::ALT_SCREEN)
     }
 
     fn build_cells_into(&self, cells: &mut Vec<CellVisual>) {

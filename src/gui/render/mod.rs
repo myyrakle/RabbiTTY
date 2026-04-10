@@ -25,6 +25,7 @@ pub struct TerminalProgram {
     pub padding: [f32; 2],
     pub clear_color: [f32; 4],
     pub selection: Option<Selection>,
+    pub mouse_mode: bool,
 }
 
 impl TerminalProgram {
@@ -71,25 +72,59 @@ impl ShaderProgram<Message> for TerminalProgram {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 if let Some(pos) = cursor.position_in(bounds) {
                     let grid_pos = self.pixel_to_grid(pos, bounds);
+                    if self.mouse_mode {
+                        state.dragging = true;
+                        return Some(
+                            Action::publish(Message::TerminalMousePress {
+                                col: grid_pos.col,
+                                row: grid_pos.row,
+                            })
+                            .and_capture(),
+                        );
+                    }
                     state.dragging = true;
                     state.drag_start = Some(grid_pos);
                     return Some(Action::publish(Message::SelectionChanged(None)).and_capture());
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                if state.dragging
-                    && let (Some(start), Some(pos)) = (state.drag_start, cursor.position_in(bounds))
-                {
-                    let end = self.pixel_to_grid(pos, bounds);
-                    if start != end {
-                        let sel = Selection { start, end };
+                if let Some(pos) = cursor.position_in(bounds) {
+                    if self.mouse_mode && state.dragging {
+                        let grid_pos = self.pixel_to_grid(pos, bounds);
                         return Some(
-                            Action::publish(Message::SelectionChanged(Some(sel))).and_capture(),
+                            Action::publish(Message::TerminalMouseDrag {
+                                col: grid_pos.col,
+                                row: grid_pos.row,
+                            })
+                            .and_capture(),
                         );
+                    }
+                    if state.dragging
+                        && let Some(start) = state.drag_start
+                    {
+                        let end = self.pixel_to_grid(pos, bounds);
+                        if start != end {
+                            let sel = Selection { start, end };
+                            return Some(
+                                Action::publish(Message::SelectionChanged(Some(sel))).and_capture(),
+                            );
+                        }
                     }
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                if self.mouse_mode
+                    && let Some(pos) = cursor.position_in(bounds) {
+                        let grid_pos = self.pixel_to_grid(pos, bounds);
+                        state.dragging = false;
+                        return Some(
+                            Action::publish(Message::TerminalMouseRelease {
+                                col: grid_pos.col,
+                                row: grid_pos.row,
+                            })
+                            .and_capture(),
+                        );
+                    }
                 if state.dragging {
                     state.dragging = false;
                     return Some(Action::capture());

@@ -50,9 +50,8 @@ impl App {
                         mouse::ScrollDelta::Lines { x, y } => (y, x * 30.0),
                         mouse::ScrollDelta::Pixels { x, y } => (y / 20.0, x),
                     };
-                    let line_delta = lines_y.round() as i32;
-                    if line_delta != 0 {
-                        Some(Message::TerminalWheelScroll(line_delta))
+                    if lines_y.abs() > 0.01 {
+                        Some(Message::TerminalWheelScroll(lines_y))
                     } else if pixels_x.abs() > 0.1 {
                         Some(Message::TabBarScroll(pixels_x))
                     } else {

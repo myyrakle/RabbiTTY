@@ -154,6 +154,51 @@ impl TerminalTab {
         self.engine.scroll_to_relative(rel);
     }
 
+    /// Returns true when the terminal program has enabled mouse reporting.
+    pub fn mouse_mode(&self) -> bool {
+        self.engine.mouse_mode()
+    }
+
+    /// Returns true when the terminal is in the alternate screen buffer.
+    pub fn alt_screen(&self) -> bool {
+        self.engine.alt_screen()
+    }
+
+    /// Send scroll as arrow key sequences (for alt screen without mouse mode).
+    pub fn send_scroll_as_arrows(&self, lines: i32) {
+        let TerminalSession::Active(session) = &self.session else {
+            return;
+        };
+        let arrow = if lines > 0 { b'A' } else { b'B' }; // Up / Down
+        let seq = [b'\x1b', b'[', arrow];
+        for _ in 0..lines.unsigned_abs() {
+            let _ = session.send_bytes(&seq);
+        }
+    }
+
+    /// Send a mouse event to the PTY using SGR or legacy encoding.
+    pub fn send_mouse_event(&self, button: u8, col: usize, row: usize, pressed: bool) {
+        let TerminalSession::Active(session) = &self.session else {
+            return;
+        };
+        // SGR encoding: \x1b[<btn;col;row;M/m  (M=press, m=release)
+        // Columns and rows are 1-based in the protocol.
+        if self.engine.sgr_mouse() {
+            let suffix = if pressed { 'M' } else { 'm' };
+            let seq = format!("\x1b[<{};{};{}{}", button, col + 1, row + 1, suffix);
+            let _ = session.send_bytes(seq.as_bytes());
+        } else {
+            // Legacy X10/normal encoding: only sends press, limited to 223 cols/rows
+            if pressed {
+                let cb = 32 + button;
+                let cx = 32 + (col as u8 + 1);
+                let cy = 32 + (row as u8 + 1);
+                let seq = [b'\x1b', b'[', b'M', cb, cx, cy];
+                let _ = session.send_bytes(&seq);
+            }
+        }
+    }
+
     pub fn resize(&mut self, columns: usize, lines: usize) {
         let new_size = TerminalSize::new(columns, lines);
         self.engine.resize(new_size);

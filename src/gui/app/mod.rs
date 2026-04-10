@@ -51,9 +51,21 @@ pub enum Message {
     TabBarScroll(f32),
     TabBarScrolled(f32),
     SelectionChanged(Option<crate::terminal::Selection>),
+    TerminalMousePress {
+        col: usize,
+        row: usize,
+    },
+    TerminalMouseRelease {
+        col: usize,
+        row: usize,
+    },
+    TerminalMouseDrag {
+        col: usize,
+        row: usize,
+    },
     PasteClipboard(String),
     TerminalScroll(f32),
-    TerminalWheelScroll(i32),
+    TerminalWheelScroll(f32),
 
     WindowResized(Size),
     ApplyWindowStyle,
@@ -88,6 +100,7 @@ pub struct App {
     pub(super) next_tab_id: u64,
     pub(super) tab_bar_scroll_x: f32,
     pub(super) ignore_scrollable_sync: bool,
+    pub(super) scroll_accumulator: f32,
     pub(super) window_style_applied: bool,
     #[cfg(target_os = "macos")]
     pub(super) show_restart_confirm: bool,
@@ -124,6 +137,7 @@ impl App {
             next_tab_id: 1,
             tab_bar_scroll_x: 0.0,
             ignore_scrollable_sync: false,
+            scroll_accumulator: 0.0,
             window_style_applied: false,
             #[cfg(target_os = "macos")]
             show_restart_confirm: false,

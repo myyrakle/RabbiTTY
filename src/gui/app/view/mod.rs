@@ -128,6 +128,7 @@ impl App {
             ],
             clear_color,
             selection: active_tab.selection,
+            mouse_mode: active_tab.mouse_mode(),
         }
         .widget()
         .width(Length::Fill)
