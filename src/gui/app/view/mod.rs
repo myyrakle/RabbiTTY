@@ -5,10 +5,10 @@ mod shell_picker;
 pub(in crate::gui) use dialog::{DialogButton, confirm_dialog};
 
 use super::{App, Message, SETTINGS_TAB_INDEX};
-use crate::gui::components::{panel, tab_bar};
+use crate::gui::components::{button_primary, panel, tab_bar};
 use crate::gui::render::TerminalProgram;
-use iced::widget::{column, container, row, scrollable, stack, text};
-use iced::{Element, Length};
+use iced::widget::{column, container, image, row, scrollable, stack, text};
+use iced::{Alignment, Element, Length};
 
 impl App {
     pub fn view(&self) -> Element<'_, Message> {
@@ -46,12 +46,21 @@ impl App {
         } else if let Some(active_tab) = self.tabs.get(self.active_tab) {
             self.view_terminal(active_tab)
         } else {
-            column(vec![
-                text("No tabs open").size(20).into(),
-                text("Click + to create a new tab").size(14).into(),
-            ])
-            .spacing(8)
-            .padding(20)
+            let logo_handle =
+                image::Handle::from_bytes(&include_bytes!("../../../../assets/logo.png")[..]);
+            let logo = image(logo_handle)
+                .width(Length::Fixed(96.0))
+                .height(Length::Fixed(96.0));
+            let version_label = text(format!("RabbiTTY v{}", env!("CARGO_PKG_VERSION")))
+                .size(13)
+                .color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4));
+            let new_tab_btn = button_primary("New Tab").on_press(Message::OpenShellPicker);
+            container(
+                column![logo, version_label, new_tab_btn]
+                    .spacing(12)
+                    .align_x(Alignment::Center),
+            )
+            .center(Length::Fill)
             .into()
         };
 
