@@ -9,7 +9,6 @@ pub struct TerminalTheme {
     pub(super) background: Rgb,
     cursor: Rgb,
     ansi: [Rgb; 16],
-    pub(super) background_opacity: f32,
 }
 
 /// A named color preset with foreground, background, cursor, and 16 ANSI colors.
@@ -205,7 +204,6 @@ impl Default for TerminalTheme {
             background: rgb_from_triplet(preset.bg),
             cursor: rgb_from_triplet(preset.cursor),
             ansi: preset.ansi.map(rgb_from_triplet),
-            background_opacity: 1.0,
         }
     }
 }
@@ -225,7 +223,6 @@ impl TerminalTheme {
             background: rgb_from_triplet(config.theme.background),
             cursor: rgb_from_triplet(config.theme.cursor),
             ansi: base_ansi,
-            background_opacity: config.theme.background_opacity,
         }
     }
 

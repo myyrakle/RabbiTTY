@@ -109,14 +109,9 @@ impl App {
         let dims = active_tab.size();
         let cells = active_tab.render_cells();
         let grid_size = dims;
-        let bg = self.config.theme.background;
-        let bg_a = self.config.theme.background_opacity;
-        let clear_color = [
-            super::srgb_u8_to_linear(bg[0]),
-            super::srgb_u8_to_linear(bg[1]),
-            super::srgb_u8_to_linear(bg[2]),
-            bg_a,
-        ];
+
+        // identical to other panes (e.g. Settings) and avoids double blending.
+        let clear_color = [0.0, 0.0, 0.0, 0.0];
         let terminal_widget = TerminalProgram {
             cells,
             grid_size,

@@ -151,7 +151,9 @@ impl TerminalEngine {
         } = self.term.renderable_content();
 
         let default_fg = rgb_to_rgba(self.theme.foreground, 1.0);
-        let default_bg = rgb_to_rgba(self.theme.background, self.theme.background_opacity);
+
+        // Default cells are transparent so the panel background shows through.
+        let default_bg = [0.0, 0.0, 0.0, 0.0];
         let total = self.size.lines * self.size.columns;
         let default_cell = CellVisual {
             ch: ' ',
@@ -204,7 +206,15 @@ impl TerminalEngine {
                     fg_rgb = enforce_min_contrast(fg_rgb, bg_rgb);
 
                     let mut fg = rgb_to_rgba(fg_rgb, 1.0);
-                    let bg = rgb_to_rgba(bg_rgb, self.theme.background_opacity);
+                    // When the cell background matches the theme background, leave
+                    // it transparent so the panel background shows through exactly
+                    // (avoids double-alpha compositing vs. other panes like Settings).
+                    // Non-default backgrounds (selections, highlights) stay opaque.
+                    let bg = if bg_rgb == self.theme.background {
+                        [0.0, 0.0, 0.0, 0.0]
+                    } else {
+                        rgb_to_rgba(bg_rgb, 1.0)
+                    };
 
                     if indexed.cell.flags.contains(Flags::HIDDEN) {
                         fg = bg;
