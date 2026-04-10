@@ -55,6 +55,7 @@ pub struct SshProfile {
     pub port: u16,
     pub user: String,
     pub identity_file: Option<String>,
+    pub password: Option<String>,
 }
 
 impl Default for SshProfile {
@@ -65,6 +66,7 @@ impl Default for SshProfile {
             port: 22,
             user: String::new(),
             identity_file: None,
+            password: None,
         }
     }
 }
@@ -247,6 +249,10 @@ impl AppConfig {
             {
                 config.apply_file(file);
             }
+        }
+        // Load passwords from OS keychain
+        for profile in &mut config.ssh_profiles {
+            profile.password = crate::keychain::get_password(&profile.host, &profile.user);
         }
         config
     }
@@ -472,6 +478,7 @@ impl AppConfig {
                             .map(str::trim)
                             .filter(|s| !s.is_empty())
                             .map(String::from),
+                        password: None,
                     })
                 })
                 .collect();
@@ -927,6 +934,77 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(config.terminal.font_size, default_size);
+    }
+
+    #[test]
+    fn ssh_profile_parsed_from_file_config() {
+        let mut config = AppConfig::default();
+        let file = toml::from_str::<FileConfig>(
+            r#"
+            [[ssh_profiles]]
+            name = "My Server"
+            host = "example.com"
+            port = 2222
+            user = "admin"
+            identity_file = "~/.ssh/id_ed25519"
+
+            [[ssh_profiles]]
+            host = "bare.host"
+            "#,
+        )
+        .expect("file config should parse");
+
+        config.apply_file(file);
+        assert_eq!(config.ssh_profiles.len(), 2);
+
+        let p0 = &config.ssh_profiles[0];
+        assert_eq!(p0.name, "My Server");
+        assert_eq!(p0.host, "example.com");
+        assert_eq!(p0.port, 2222);
+        assert_eq!(p0.user, "admin");
+        assert_eq!(p0.identity_file.as_deref(), Some("~/.ssh/id_ed25519"));
+        assert!(p0.password.is_none()); // password is never in config file
+
+        let p1 = &config.ssh_profiles[1];
+        assert_eq!(p1.name, "bare.host"); // name defaults to host
+        assert_eq!(p1.port, 22); // default port
+        assert!(p1.user.is_empty());
+    }
+
+    #[test]
+    fn ssh_profile_skips_empty_host() {
+        let mut config = AppConfig::default();
+        let file = toml::from_str::<FileConfig>(
+            r#"
+            [[ssh_profiles]]
+            name = "No Host"
+            host = "  "
+            "#,
+        )
+        .expect("file config should parse");
+
+        config.apply_file(file);
+        assert!(config.ssh_profiles.is_empty());
+    }
+
+    #[test]
+    fn ssh_profile_serialization_excludes_password() {
+        let config = AppConfig {
+            ssh_profiles: vec![SshProfile {
+                name: "test".into(),
+                host: "host.com".into(),
+                port: 22,
+                user: "user".into(),
+                identity_file: None,
+                password: Some("secret123".into()),
+            }],
+            ..Default::default()
+        };
+
+        let file = FileConfig::from(&config);
+        let toml_str = toml::to_string_pretty(&file).unwrap();
+        assert!(!toml_str.contains("secret123"));
+        assert!(!toml_str.contains("password"));
     }
 
     #[test]

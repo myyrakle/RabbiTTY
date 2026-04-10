@@ -1,5 +1,6 @@
 mod config;
 mod gui;
+mod keychain;
 mod platform;
 mod session;
 mod terminal;

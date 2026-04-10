@@ -54,6 +54,7 @@ pub enum SshProfileField {
     Port,
     User,
     IdentityFile,
+    Password,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,6 +103,7 @@ pub struct SshProfileDraft {
     pub port: String,
     pub user: String,
     pub identity_file: String,
+    pub password: String,
 }
 
 impl SshProfileDraft {
@@ -112,6 +114,7 @@ impl SshProfileDraft {
             port: profile.port.to_string(),
             user: profile.user.clone(),
             identity_file: profile.identity_file.clone().unwrap_or_default(),
+            password: profile.password.clone().unwrap_or_default(),
         }
     }
 
@@ -127,6 +130,14 @@ impl SshProfileDraft {
             user: self.user.trim().to_string(),
             identity_file: {
                 let v = self.identity_file.trim();
+                if v.is_empty() {
+                    None
+                } else {
+                    Some(v.to_string())
+                }
+            },
+            password: {
+                let v = self.password.trim();
                 if v.is_empty() {
                     None
                 } else {
@@ -199,6 +210,7 @@ impl SettingsDraft {
                 SshProfileField::Port => draft.port = value,
                 SshProfileField::User => draft.user = value,
                 SshProfileField::IdentityFile => draft.identity_file = value,
+                SshProfileField::Password => draft.password = value,
             }
         }
     }
@@ -565,4 +577,82 @@ where
 
 pub fn format_rgb(rgb: [u8; 3]) -> String {
     format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::SshProfile;
+
+    #[test]
+    fn ssh_draft_roundtrip_with_password() {
+        let profile = SshProfile {
+            name: "prod".into(),
+            host: "10.0.0.1".into(),
+            port: 2222,
+            user: "deploy".into(),
+            identity_file: Some("~/.ssh/id_rsa".into()),
+            password: Some("s3cret".into()),
+        };
+
+        let draft = SshProfileDraft::from_profile(&profile);
+        assert_eq!(draft.name, "prod");
+        assert_eq!(draft.host, "10.0.0.1");
+        assert_eq!(draft.port, "2222");
+        assert_eq!(draft.user, "deploy");
+        assert_eq!(draft.identity_file, "~/.ssh/id_rsa");
+        assert_eq!(draft.password, "s3cret");
+
+        let back = draft.to_profile().unwrap();
+        assert_eq!(back.password.as_deref(), Some("s3cret"));
+        assert_eq!(back.port, 2222);
+    }
+
+    #[test]
+    fn ssh_draft_empty_password_becomes_none() {
+        let draft = SshProfileDraft {
+            name: "test".into(),
+            host: "host".into(),
+            port: "22".into(),
+            user: "".into(),
+            identity_file: "".into(),
+            password: "  ".into(),
+        };
+        let profile = draft.to_profile().unwrap();
+        assert!(profile.password.is_none());
+        assert!(profile.identity_file.is_none());
+    }
+
+    #[test]
+    fn ssh_draft_empty_host_returns_none() {
+        let draft = SshProfileDraft {
+            name: "test".into(),
+            host: "  ".into(),
+            port: "22".into(),
+            user: "".into(),
+            identity_file: "".into(),
+            password: "pass".into(),
+        };
+        assert!(draft.to_profile().is_none());
+    }
+
+    #[test]
+    fn update_ssh_profile_password_field() {
+        let config = crate::config::AppConfig {
+            ssh_profiles: vec![SshProfile {
+                name: "srv".into(),
+                host: "h".into(),
+                port: 22,
+                user: "u".into(),
+                identity_file: None,
+                password: None,
+            }],
+            ..Default::default()
+        };
+        let mut draft = SettingsDraft::from_config(&config);
+        assert_eq!(draft.ssh_profiles[0].password, "");
+
+        draft.update_ssh_profile(0, SshProfileField::Password, "newpass".into());
+        assert_eq!(draft.ssh_profiles[0].password, "newpass");
+    }
 }

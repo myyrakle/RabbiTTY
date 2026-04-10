@@ -65,6 +65,14 @@ impl App {
             Message::SaveSshProfiles => {
                 self.settings_draft
                     .apply_ssh_profiles_to(&mut self.config.ssh_profiles);
+                // Save passwords to OS keychain (not in config file)
+                for profile in &self.config.ssh_profiles {
+                    if let Some(ref pw) = profile.password {
+                        crate::keychain::set_password(&profile.host, &profile.user, pw);
+                    } else {
+                        crate::keychain::delete_password(&profile.host, &profile.user);
+                    }
+                }
                 if let Err(err) = self.config.save() {
                     eprintln!("Failed to save config: {err}");
                 }

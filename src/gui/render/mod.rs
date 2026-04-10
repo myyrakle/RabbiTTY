@@ -114,17 +114,18 @@ impl ShaderProgram<Message> for TerminalProgram {
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 if self.mouse_mode
-                    && let Some(pos) = cursor.position_in(bounds) {
-                        let grid_pos = self.pixel_to_grid(pos, bounds);
-                        state.dragging = false;
-                        return Some(
-                            Action::publish(Message::TerminalMouseRelease {
-                                col: grid_pos.col,
-                                row: grid_pos.row,
-                            })
-                            .and_capture(),
-                        );
-                    }
+                    && let Some(pos) = cursor.position_in(bounds)
+                {
+                    let grid_pos = self.pixel_to_grid(pos, bounds);
+                    state.dragging = false;
+                    return Some(
+                        Action::publish(Message::TerminalMouseRelease {
+                            col: grid_pos.col,
+                            row: grid_pos.row,
+                        })
+                        .and_capture(),
+                    );
+                }
                 if state.dragging {
                     state.dragging = false;
                     return Some(Action::capture());

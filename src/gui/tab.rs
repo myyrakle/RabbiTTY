@@ -17,6 +17,8 @@ pub struct TerminalTab {
     pub session: TerminalSession,
     pub selection: Option<Selection>,
     engine: TerminalEngine,
+    pending_password: Option<String>,
+    password_prompt_buf: Vec<u8>,
 }
 
 pub enum TerminalSession {
@@ -61,6 +63,12 @@ impl TerminalTab {
             ),
         };
 
+        let pending_password = if let ShellKind::Ssh(ref profile) = shell {
+            profile.password.clone()
+        } else {
+            None
+        };
+
         Self {
             id,
             title,
@@ -68,6 +76,8 @@ impl TerminalTab {
             session,
             selection: None,
             engine: TerminalEngine::new(size, 10_000, writer, theme),
+            pending_password,
+            password_prompt_buf: Vec::new(),
         }
     }
 
@@ -75,6 +85,30 @@ impl TerminalTab {
         self.engine.feed_bytes(bytes);
         if let Some(new_title) = self.engine.take_title() {
             self.title = new_title;
+        }
+        if self.pending_password.is_some() {
+            self.check_password_prompt(bytes);
+        }
+    }
+
+    fn check_password_prompt(&mut self, bytes: &[u8]) {
+        // Buffer recent output to detect password prompts across chunk boundaries.
+        // Keep only the last 256 bytes to avoid unbounded growth.
+        self.password_prompt_buf.extend_from_slice(bytes);
+        if self.password_prompt_buf.len() > 256 {
+            let start = self.password_prompt_buf.len() - 256;
+            self.password_prompt_buf.drain(..start);
+        }
+
+        if is_password_prompt(&self.password_prompt_buf)
+            && let Some(password) = self.pending_password.take()
+        {
+            if let TerminalSession::Active(ref session) = self.session {
+                let mut payload = password.into_bytes();
+                payload.push(b'\n');
+                let _ = session.send_bytes(&payload);
+            }
+            self.password_prompt_buf.clear();
         }
     }
 
@@ -514,5 +548,85 @@ impl Display for SessionError {
             SessionError::Spawn(err) => write!(f, "{err}"),
             SessionError::Io(err) => write!(f, "{err}"),
         }
+    }
+}
+
+fn is_password_prompt(buf: &[u8]) -> bool {
+    let haystack = String::from_utf8_lossy(buf).to_ascii_lowercase();
+    haystack.contains("password:")
+        || haystack.contains("password for")
+        || haystack.contains("'s password:")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_standard_password_prompts() {
+        assert!(is_password_prompt(b"Password:"));
+        assert!(is_password_prompt(b"password: "));
+        assert!(is_password_prompt(b"admin@host's password:"));
+        assert!(is_password_prompt(b"Password for admin:"));
+        assert!(is_password_prompt(b"PASSWORD:"));
+    }
+
+    #[test]
+    fn rejects_non_password_output() {
+        assert!(!is_password_prompt(b"Last login: Mon Jan 1"));
+        assert!(!is_password_prompt(b"$ echo hello"));
+        assert!(!is_password_prompt(b""));
+        assert!(!is_password_prompt(b"Welcome to Ubuntu"));
+    }
+
+    #[test]
+    fn ssh_profile_launch_spec_includes_port_and_user() {
+        let profile = SshProfile {
+            name: "test".into(),
+            host: "example.com".into(),
+            port: 2222,
+            user: "admin".into(),
+            identity_file: None,
+            password: Some("secret".into()),
+        };
+        let size = TerminalSize::new(80, 24);
+        let spec = profile.launch_spec(size);
+        assert_eq!(spec.program, "ssh");
+        assert!(spec.args.contains(&"-p".to_string()));
+        assert!(spec.args.contains(&"2222".to_string()));
+        assert!(spec.args.contains(&"admin@example.com".to_string()));
+    }
+
+    #[test]
+    fn ssh_profile_tab_title() {
+        let with_name = SshProfile {
+            name: "Production".into(),
+            host: "prod.example.com".into(),
+            port: 22,
+            user: "deploy".into(),
+            identity_file: None,
+            password: None,
+        };
+        assert_eq!(with_name.tab_title(), "Production");
+
+        let no_name = SshProfile {
+            name: String::new(),
+            host: "dev.example.com".into(),
+            port: 22,
+            user: "user".into(),
+            identity_file: None,
+            password: None,
+        };
+        assert_eq!(no_name.tab_title(), "user@dev.example.com");
+
+        let no_name_no_user = SshProfile {
+            name: String::new(),
+            host: "bare.host".into(),
+            port: 22,
+            user: String::new(),
+            identity_file: None,
+            password: None,
+        };
+        assert_eq!(no_name_no_user.tab_title(), "bare.host");
     }
 }
