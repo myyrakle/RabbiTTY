@@ -6,7 +6,7 @@ use super::{App, Message, SETTINGS_TAB_INDEX};
 use crate::gui::settings::{SettingsDraft, SettingsField};
 use crate::gui::tab::ShellKind;
 use iced::keyboard::{Key, key::Named};
-use iced::{Task, widget, window};
+use iced::{Task, widget};
 use std::sync::LazyLock;
 
 pub(in crate::gui) static TAB_BAR_SCROLLABLE_ID: LazyLock<widget::Id> =
@@ -248,15 +248,15 @@ impl App {
             }
             #[cfg(target_os = "windows")]
             Message::WindowMinimize => {
-                return window::latest().and_then(|id| window::minimize(id, true));
+                return iced::window::latest().and_then(|id| iced::window::minimize(id, true));
             }
             #[cfg(target_os = "windows")]
             Message::WindowMaximize => {
-                return window::latest().and_then(window::toggle_maximize);
+                return iced::window::latest().and_then(iced::window::toggle_maximize);
             }
             #[cfg(target_os = "windows")]
             Message::WindowDrag => {
-                return window::latest().and_then(window::drag);
+                return iced::window::latest().and_then(iced::window::drag);
             }
         }
 
@@ -346,10 +346,10 @@ impl App {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
             let theme = self.config.theme.clone();
-            window::latest()
+            iced::window::latest()
                 .and_then(move |id| {
                     let theme = theme.clone();
-                    window::run(id, move |window| {
+                    iced::window::run(id, move |window| {
                         if let Ok(handle) = window.window_handle() {
                             crate::platform::apply_style(handle, &theme);
                         }
@@ -372,7 +372,7 @@ fn is_copy_shortcut(key: &Key, modifiers: iced::keyboard::Modifiers) -> bool {
         #[cfg(target_os = "macos")]
         return modifiers.logo();
         #[cfg(not(target_os = "macos"))]
-        return modifiers.ctrl() && modifiers.shift();
+        return modifiers.control() && modifiers.shift();
     }
     false
 }
@@ -384,7 +384,7 @@ fn is_paste_shortcut(key: &Key, modifiers: iced::keyboard::Modifiers) -> bool {
         #[cfg(target_os = "macos")]
         return modifiers.logo();
         #[cfg(not(target_os = "macos"))]
-        return modifiers.ctrl() && modifiers.shift();
+        return modifiers.control() && modifiers.shift();
     }
     false
 }
