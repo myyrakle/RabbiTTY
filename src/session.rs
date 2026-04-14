@@ -1,8 +1,14 @@
 use alacritty_terminal::event::{OnResize, WindowSize};
 use alacritty_terminal::tty::{self, Options, Shell};
+#[cfg(windows)]
+use alacritty_terminal::tty::{ChildEvent, EventedPty, EventedReadWrite};
 use iced::futures::SinkExt;
 use iced::futures::channel::mpsc;
-use std::io::{ErrorKind, Read, Write};
+#[cfg(unix)]
+use std::io::ErrorKind;
+use std::io::{Read, Write};
+#[cfg(windows)]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
@@ -18,7 +24,12 @@ pub struct LaunchSpec {
 
 pub struct Session {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    #[cfg(unix)]
     pty: Option<tty::Pty>,
+    #[cfg(windows)]
+    pty: Arc<Mutex<tty::Pty>>,
+    #[cfg(windows)]
+    shutdown: Arc<AtomicBool>,
     reader: Option<JoinHandle<()>>,
 }
 
@@ -34,7 +45,32 @@ pub enum OutputEvent {
     Closed { tab_id: u64 },
 }
 
+#[cfg(windows)]
+struct PtyWriter {
+    pty: Arc<Mutex<tty::Pty>>,
+}
+
+#[cfg(windows)]
+impl Write for PtyWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let mut guard = self
+            .pty
+            .lock()
+            .map_err(|_| std::io::Error::other("pty mutex poisoned"))?;
+        guard.writer().write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let mut guard = self
+            .pty
+            .lock()
+            .map_err(|_| std::io::Error::other("pty mutex poisoned"))?;
+        guard.writer().flush()
+    }
+}
+
 impl Session {
+    #[cfg(unix)]
     pub fn spawn(
         spec: LaunchSpec,
         tab_id: u64,
@@ -110,6 +146,76 @@ impl Session {
         })
     }
 
+    #[cfg(windows)]
+    pub fn spawn(
+        spec: LaunchSpec,
+        tab_id: u64,
+        mut output_tx: mpsc::Sender<OutputEvent>,
+    ) -> Result<Self, SessionError> {
+        tty::setup_env();
+
+        let options = Options {
+            shell: Some(Shell::new(spec.program, spec.args)),
+            env: spec.env.into_iter().collect(),
+            ..Default::default()
+        };
+
+        let window_size = WindowSize {
+            num_lines: spec.rows,
+            num_cols: spec.cols,
+            cell_width: 1,
+            cell_height: 1,
+        };
+
+        let pty = tty::new(&options, window_size, tab_id)
+            .map_err(|err| SessionError::Spawn(format!("pty spawn failed: {err}")))?;
+        let pty = Arc::new(Mutex::new(pty));
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        let writer: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(Box::new(PtyWriter {
+            pty: Arc::clone(&pty),
+        })));
+
+        let reader_pty = Arc::clone(&pty);
+        let reader_shutdown = Arc::clone(&shutdown);
+        let reader_handle = thread::spawn(move || {
+            let mut buf = [0u8; 2048];
+            while !reader_shutdown.load(Ordering::Acquire) {
+                let (bytes, exited) = {
+                    let mut guard = match reader_pty.lock() {
+                        Ok(g) => g,
+                        Err(_) => break,
+                    };
+                    let n = guard.reader().read(&mut buf).unwrap_or(0);
+                    let bytes = if n > 0 { Some(buf[..n].to_vec()) } else { None };
+                    let exited = matches!(guard.next_child_event(), Some(ChildEvent::Exited(_)));
+                    (bytes, exited)
+                };
+
+                if let Some(bytes) = bytes {
+                    if !send_output_event(&mut output_tx, OutputEvent::Data { tab_id, bytes }) {
+                        break;
+                    }
+                    continue;
+                }
+
+                if exited {
+                    let _ = send_output_event(&mut output_tx, OutputEvent::Closed { tab_id });
+                    break;
+                }
+
+                thread::sleep(Duration::from_millis(5));
+            }
+        });
+
+        Ok(Self {
+            writer,
+            pty,
+            shutdown,
+            reader: Some(reader_handle),
+        })
+    }
+
     pub fn send_bytes(&self, bytes: &[u8]) -> Result<(), SessionError> {
         let mut guard = self
             .writer
@@ -124,6 +230,7 @@ impl Session {
         Arc::clone(&self.writer)
     }
 
+    #[cfg(unix)]
     pub fn resize(&mut self, rows: u16, cols: u16) -> Result<(), SessionError> {
         if let Some(ref mut pty) = self.pty {
             let window_size = WindowSize {
@@ -138,12 +245,29 @@ impl Session {
             Err(SessionError::Io("no pty".into()))
         }
     }
+
+    #[cfg(windows)]
+    pub fn resize(&mut self, rows: u16, cols: u16) -> Result<(), SessionError> {
+        let window_size = WindowSize {
+            num_lines: rows,
+            num_cols: cols,
+            cell_width: 1,
+            cell_height: 1,
+        };
+        let mut guard = self
+            .pty
+            .lock()
+            .map_err(|err| SessionError::Io(format!("pty lock failed: {err}")))?;
+        guard.on_resize(window_size);
+        Ok(())
+    }
 }
 
 fn send_output_event(output_tx: &mut mpsc::Sender<OutputEvent>, event: OutputEvent) -> bool {
     iced::futures::executor::block_on(output_tx.send(event)).is_ok()
 }
 
+#[cfg(unix)]
 impl Drop for Session {
     fn drop(&mut self) {
         // Drop the PTY first — kills the child process, causing
@@ -151,6 +275,16 @@ impl Drop for Session {
         // EIO on its cloned master fd and exit.
         self.pty.take();
 
+        if let Some(handle) = self.reader.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for Session {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::Release);
         if let Some(handle) = self.reader.take() {
             let _ = handle.join();
         }
