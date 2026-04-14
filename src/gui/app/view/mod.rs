@@ -2,6 +2,7 @@ mod dialog;
 mod settings;
 mod shell_picker;
 
+#[cfg(target_os = "macos")]
 pub(in crate::gui) use dialog::{DialogButton, confirm_dialog};
 
 use super::{App, Message, SETTINGS_TAB_INDEX};
