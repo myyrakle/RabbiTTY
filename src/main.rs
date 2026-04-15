@@ -24,7 +24,7 @@ fn main() -> iced::Result {
 
             let init_task = iced::Task::perform(
                 async {
-                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    std::thread::sleep(std::time::Duration::from_millis(50));
                 },
                 |_| gui::app::Message::ApplyWindowStyle,
             );

@@ -17,10 +17,9 @@ strip = false
 # GUI & Rendering
 iced = { version = "0.14.0", default-features = false, features = [
     "wgpu",
-    "tokio",
-    "canvas",
     "advanced",
     "image",
+    "tokio",
     "x11",
     "wayland",
 ] }
@@ -28,15 +27,7 @@ wgpu = "29.0.1"
 bytemuck = { version = "1.25", features = ["derive"] }
 ab_glyph = "0.2"
 
-# Async
-tokio = { version = "1.51", default-features = false, features = [
-    "rt-multi-thread",
-    "macros",
-    "net",
-    "sync",
-    "time",
-] }
-futures = "0.3.32"
+futures = { version = "0.3.32", default-features = false, features = ["executor"] }
 
 # Terminal
 alacritty_terminal = "0.26.0"
@@ -44,11 +35,12 @@ dirs = "6.0"
 serde = { version = "1.0", features = ["derive"] }
 toml = "1.1"
 fontdb = "0.23"
-keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native"] }
 
 # Windows-specific (custom titlebar with resize border)
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.62", features = [
+keyring = { version = "3", default-features = false, features = ["windows-native"] }
+windows = { version = "0.62", default-features = false, features = [
+    "std",
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Shell",
@@ -56,4 +48,8 @@ windows = { version = "0.62", features = [
 ] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["apple-native"] }
 objc2-app-kit = "0.3.2"
+
+[target.'cfg(not(any(target_os = "windows", target_os = "macos")))'.dependencies]
+keyring = { version = "3", default-features = false, features = ["linux-native"] }

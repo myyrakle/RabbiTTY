@@ -264,7 +264,7 @@ impl Session {
 }
 
 fn send_output_event(output_tx: &mut mpsc::Sender<OutputEvent>, event: OutputEvent) -> bool {
-    iced::futures::executor::block_on(output_tx.send(event)).is_ok()
+    futures::executor::block_on(output_tx.send(event)).is_ok()
 }
 
 #[cfg(unix)]
