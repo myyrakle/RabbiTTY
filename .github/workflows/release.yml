@@ -1,0 +1,182 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref_type == 'tag' && github.ref_name || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: rabbitty
+
+jobs:
+  prepare:
+    name: Resolve tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate selected ref
+        id: resolve
+        shell: bash
+        env:
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+
+          if [ "${REF_TYPE}" != "tag" ]; then
+            echo "This workflow must be started from a tag. Current ref: ${REF} (${REF_TYPE})" >&2
+            exit 1
+          fi
+
+          git fetch --force --tags origin
+
+          if ! git rev-parse --verify --quiet "refs/tags/${REF_NAME}" >/dev/null; then
+            echo "Tag not found: ${REF_NAME}" >&2
+            exit 1
+          fi
+
+          echo "tag=${REF_NAME}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.id }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+            binary_name: rabbitty
+          - id: linux-arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            archive: tar.gz
+            binary_name: rabbitty
+          - id: windows-amd64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+            binary_name: rabbitty.exe
+          - id: macos-arm64
+            runner: macos-14
+            target: aarch64-apple-darwin
+            archive: tar.gz
+            binary_name: rabbitty
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.prepare.outputs.tag }}
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.92 --profile minimal
+          rustup default 1.92
+          rustup target add ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Package archive (unix)
+        id: package_unix
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          package_root="dist/${BIN_NAME}-${RELEASE_TAG}-${{ matrix.id }}"
+          mkdir -p "${package_root}"
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "${package_root}/${BIN_NAME}"
+
+          archive_path="${package_root}.tar.gz"
+          tar -C dist -czf "${archive_path}" "$(basename "${package_root}")"
+
+          echo "archive=${archive_path}" >> "$GITHUB_OUTPUT"
+
+      - name: Package archive (windows)
+        id: package_windows
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          $packageRoot = "dist/${env:BIN_NAME}-${env:RELEASE_TAG}-${{ matrix.id }}"
+          New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
+
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" -Destination (Join-Path $packageRoot "${env:BIN_NAME}.exe")
+
+          $archivePath = "${packageRoot}.zip"
+          Compress-Archive -Path $packageRoot -DestinationPath $archivePath -Force
+
+          "archive=$archivePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.id }}
+          path: ${{ steps.package_unix.outputs.archive || steps.package_windows.outputs.archive }}
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v5
+        with:
+          pattern: release-*
+          path: dist
+
+      - name: Create release if needed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Release already exists for ${RELEASE_TAG}"
+          else
+            gh release create "${RELEASE_TAG}" --verify-tag --title "${RELEASE_TAG}" --generate-notes
+          fi
+
+      - name: Attach artifacts to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob globstar
+
+          assets=()
+          for file in dist/**/*; do
+            if [ -f "${file}" ]; then
+              assets+=("${file}")
+            fi
+          done
+
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No release assets found." >&2
+            exit 1
+          fi
+
+          gh release upload "${RELEASE_TAG}" "${assets[@]}" --clobber
