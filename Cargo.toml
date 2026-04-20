@@ -1,6 +1,6 @@
 [package]
 name = "rabbitty"
-version = "0.0.3"
+version = "0.1.0"
 edition = "2024"
 authors = ["neverprogrammer@gmail.com"]
 rust-version = "1.92"
