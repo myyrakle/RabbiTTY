@@ -238,10 +238,9 @@ impl App {
             Message::WindowResized(size) => {
                 return self.handle_window_resized(size);
             }
-            Message::ResizeDebounce(seq) => {
-                if seq == self.resize_debounce_seq {
-                    self.apply_resize();
-                }
+            Message::ResizeDebounce => {
+                self.resize_debounce_pending = false;
+                self.apply_resize();
             }
 
             // ── Window ──────────────────────────────────────────────

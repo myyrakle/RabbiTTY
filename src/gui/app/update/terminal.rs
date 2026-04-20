@@ -82,15 +82,17 @@ impl App {
 
     pub(super) fn handle_window_resized(&mut self, size: Size) -> Task<Message> {
         self.window_size = size;
-        self.resize_debounce_seq += 1;
-        let seq = self.resize_debounce_seq;
 
+        if self.resize_debounce_pending {
+            return Task::none();
+        }
+
+        self.resize_debounce_pending = true;
         Task::perform(
-            async move {
+            async {
                 std::thread::sleep(std::time::Duration::from_millis(50));
-                seq
             },
-            Message::ResizeDebounce,
+            |()| Message::ResizeDebounce,
         )
     }
 
