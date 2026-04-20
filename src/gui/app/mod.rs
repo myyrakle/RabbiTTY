@@ -68,6 +68,7 @@ pub enum Message {
     TerminalWheelScroll(f32),
 
     WindowResized(Size),
+    ResizeDebounce,
     ApplyWindowStyle,
 
     FontSelected(TerminalFontOption),
@@ -101,6 +102,9 @@ pub struct App {
     pub(super) tab_bar_scroll_x: f32,
     pub(super) ignore_scrollable_sync: bool,
     pub(super) scroll_accumulator: f32,
+    pub(super) resize_debounce_pending: bool,
+    pub(super) resize_debounce_seq: u64,
+    pub(super) resize_debounce_spawned_seq: u64,
     pub(super) window_style_applied: bool,
     #[cfg(target_os = "macos")]
     pub(super) show_restart_confirm: bool,
@@ -138,6 +142,9 @@ impl App {
             tab_bar_scroll_x: 0.0,
             ignore_scrollable_sync: false,
             scroll_accumulator: 0.0,
+            resize_debounce_pending: false,
+            resize_debounce_seq: 0,
+            resize_debounce_spawned_seq: 0,
             window_style_applied: false,
             #[cfg(target_os = "macos")]
             show_restart_confirm: false,

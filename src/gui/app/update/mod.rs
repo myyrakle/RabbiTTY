@@ -236,7 +236,21 @@ impl App {
                 }
             }
             Message::WindowResized(size) => {
-                self.handle_window_resized(size);
+                return self.handle_window_resized(size);
+            }
+            Message::ResizeDebounce => {
+                if self.resize_debounce_seq != self.resize_debounce_spawned_seq {
+                    // New resizes arrived during the wait -> restart timer
+                    self.resize_debounce_spawned_seq = self.resize_debounce_seq;
+                    return Task::perform(
+                        async {
+                            std::thread::sleep(std::time::Duration::from_millis(50));
+                        },
+                        |()| Message::ResizeDebounce,
+                    );
+                }
+                self.resize_debounce_pending = false;
+                self.apply_resize();
             }
 
             // ── Window ──────────────────────────────────────────────

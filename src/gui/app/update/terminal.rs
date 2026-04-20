@@ -80,8 +80,26 @@ impl App {
         )
     }
 
-    pub(super) fn handle_window_resized(&mut self, size: Size) {
+    pub(super) fn handle_window_resized(&mut self, size: Size) -> Task<Message> {
         self.window_size = size;
+        self.resize_debounce_seq += 1;
+
+        if self.resize_debounce_pending {
+            return Task::none();
+        }
+
+        self.resize_debounce_pending = true;
+        self.resize_debounce_spawned_seq = self.resize_debounce_seq;
+        Task::perform(
+            async {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            },
+            |()| Message::ResizeDebounce,
+        )
+    }
+
+    pub(super) fn apply_resize(&mut self) {
+        let size = self.window_size;
 
         let previous_width = self.config.ui.window_width;
         let previous_height = self.config.ui.window_height;
