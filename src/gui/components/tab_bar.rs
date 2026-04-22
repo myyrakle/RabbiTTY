@@ -77,41 +77,41 @@ pub fn tab_bar<'a>(
     // Windows: right control buttons
     #[cfg(target_os = "windows")]
     let window_controls = {
-        let win_btn = |label: &str, msg: Message, hover_color: Color| {
-            button(text(label).size(12))
-                .on_press(msg)
-                .padding([6, 12])
-                .style(
-                    move |_theme: &Theme, status: button::Status| button::Style {
-                        background: match status {
-                            button::Status::Hovered => Some(Background::Color(hover_color)),
-                            _ => Some(Background::Color(Color::TRANSPARENT)),
-                        },
-                        text_color: match status {
-                            button::Status::Hovered => Color::WHITE,
-                            _ => palette.text_secondary,
-                        },
-                        border: Border {
-                            radius: 0.0.into(),
-                            width: 0.0,
-                            color: Color::TRANSPARENT,
-                        },
-                        shadow: iced::Shadow::default(),
-                        snap: true,
-                    },
-                )
-        };
-
         let hover_subtle = Color {
             a: 0.15,
             ..palette.text
         };
         let hover_close = Color::from_rgb(0.9, 0.2, 0.2);
 
+        let win_style = move |hover_color: Color| {
+            move |_theme: &Theme, status: button::Status| button::Style {
+                background: match status {
+                    button::Status::Hovered => Some(Background::Color(hover_color)),
+                    _ => Some(Background::Color(Color::TRANSPARENT)),
+                },
+                text_color: match status {
+                    button::Status::Hovered => Color::WHITE,
+                    _ => palette.text_secondary,
+                },
+                border: Border::default(),
+                shadow: iced::Shadow::default(),
+                snap: true,
+            }
+        };
+
         row![
-            win_btn("─", Message::WindowMinimize, hover_subtle),
-            win_btn("□", Message::WindowMaximize, hover_subtle),
-            win_btn("✕", Message::Exit, hover_close),
+            button(text("─").size(12))
+                .on_press(Message::WindowMinimize)
+                .padding([6, 12])
+                .style(win_style(hover_subtle)),
+            button(text("□").size(12))
+                .on_press(Message::WindowMaximize)
+                .padding([6, 12])
+                .style(win_style(hover_subtle)),
+            button(text("✕").size(12))
+                .on_press(Message::Exit)
+                .padding([6, 12])
+                .style(win_style(hover_close)),
         ]
         .spacing(0)
     };
