@@ -70,6 +70,9 @@ pub(super) enum ShortcutAction {
     NextTab,
     PrevTab,
     Quit,
+    FontSizeIncrease,
+    FontSizeDecrease,
+    FontSizeReset,
 }
 
 impl ShortcutAction {
@@ -95,6 +98,15 @@ impl ShortcutAction {
         }
         if shortcut_matches(&shortcuts.quit, key, modifiers) {
             return Some(Self::Quit);
+        }
+        if shortcut_matches(&shortcuts.font_size_increase, key, modifiers) {
+            return Some(Self::FontSizeIncrease);
+        }
+        if shortcut_matches(&shortcuts.font_size_decrease, key, modifiers) {
+            return Some(Self::FontSizeDecrease);
+        }
+        if shortcut_matches(&shortcuts.font_size_reset, key, modifiers) {
+            return Some(Self::FontSizeReset);
         }
         None
     }
