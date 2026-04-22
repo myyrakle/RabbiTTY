@@ -108,7 +108,29 @@ impl App {
                 Some(Task::none())
             }
             ShortcutAction::Quit => Some(iced::exit()),
+            ShortcutAction::FontSizeIncrease => Some(self.adjust_font_size(1.0)),
+            ShortcutAction::FontSizeDecrease => Some(self.adjust_font_size(-1.0)),
+            ShortcutAction::FontSizeReset => {
+                Some(self.set_font_size(crate::config::DEFAULT_TERMINAL_FONT_SIZE))
+            }
         }
+    }
+
+    fn adjust_font_size(&mut self, delta: f32) -> Task<Message> {
+        let new_size = self.config.terminal.font_size + delta;
+        self.set_font_size(new_size)
+    }
+
+    fn set_font_size(&mut self, size: f32) -> Task<Message> {
+        let updates = crate::config::AppConfigUpdates {
+            terminal_font_size: Some(size),
+            ..Default::default()
+        };
+        let task = self.apply_updates_to_runtime(updates);
+        if let Err(err) = self.config.save() {
+            eprintln!("Failed to save config: {err}");
+        }
+        task
     }
 
     fn close_active_target(&mut self) {

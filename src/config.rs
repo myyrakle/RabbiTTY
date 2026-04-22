@@ -43,6 +43,21 @@ pub const DEFAULT_SHORTCUT_QUIT: &str = "Command+Q";
 #[cfg(not(target_os = "macos"))]
 pub const DEFAULT_SHORTCUT_QUIT: &str = "Ctrl+Q";
 
+#[cfg(target_os = "macos")]
+pub const DEFAULT_SHORTCUT_FONT_SIZE_INCREASE: &str = "Command+=";
+#[cfg(not(target_os = "macos"))]
+pub const DEFAULT_SHORTCUT_FONT_SIZE_INCREASE: &str = "Ctrl+=";
+
+#[cfg(target_os = "macos")]
+pub const DEFAULT_SHORTCUT_FONT_SIZE_DECREASE: &str = "Command+-";
+#[cfg(not(target_os = "macos"))]
+pub const DEFAULT_SHORTCUT_FONT_SIZE_DECREASE: &str = "Ctrl+-";
+
+#[cfg(target_os = "macos")]
+pub const DEFAULT_SHORTCUT_FONT_SIZE_RESET: &str = "Command+0";
+#[cfg(not(target_os = "macos"))]
+pub const DEFAULT_SHORTCUT_FONT_SIZE_RESET: &str = "Ctrl+0";
+
 pub const DEFAULT_TERMINAL_FONT_SIZE: f32 = 14.0;
 pub const DEFAULT_TERMINAL_PADDING_X: f32 = 4.0;
 pub const DEFAULT_TERMINAL_PADDING_Y: f32 = 4.0;
@@ -116,6 +131,9 @@ pub struct ShortcutsConfig {
     pub next_tab: String,
     pub prev_tab: String,
     pub quit: String,
+    pub font_size_increase: String,
+    pub font_size_decrease: String,
+    pub font_size_reset: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -174,6 +192,9 @@ struct ShortcutsFileConfig {
     next_tab: Option<String>,
     prev_tab: Option<String>,
     quit: Option<String>,
+    font_size_increase: Option<String>,
+    font_size_decrease: Option<String>,
+    font_size_reset: Option<String>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -198,6 +219,9 @@ pub struct AppConfigUpdates {
     pub shortcut_next_tab: Option<String>,
     pub shortcut_prev_tab: Option<String>,
     pub shortcut_quit: Option<String>,
+    pub shortcut_font_size_increase: Option<String>,
+    pub shortcut_font_size_decrease: Option<String>,
+    pub shortcut_font_size_reset: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -233,6 +257,9 @@ impl Default for AppConfig {
                 next_tab: DEFAULT_SHORTCUT_NEXT_TAB.to_string(),
                 prev_tab: DEFAULT_SHORTCUT_PREV_TAB.to_string(),
                 quit: DEFAULT_SHORTCUT_QUIT.to_string(),
+                font_size_increase: DEFAULT_SHORTCUT_FONT_SIZE_INCREASE.to_string(),
+                font_size_decrease: DEFAULT_SHORTCUT_FONT_SIZE_DECREASE.to_string(),
+                font_size_reset: DEFAULT_SHORTCUT_FONT_SIZE_RESET.to_string(),
             },
             ssh_profiles: vec![],
         }
@@ -329,6 +356,18 @@ impl AppConfig {
         }
         if let Some(value) = updates.shortcut_quit {
             self.shortcuts.quit = sanitize_shortcut(&value, &self.shortcuts.quit);
+        }
+        if let Some(value) = updates.shortcut_font_size_increase {
+            self.shortcuts.font_size_increase =
+                sanitize_shortcut(&value, &self.shortcuts.font_size_increase);
+        }
+        if let Some(value) = updates.shortcut_font_size_decrease {
+            self.shortcuts.font_size_decrease =
+                sanitize_shortcut(&value, &self.shortcuts.font_size_decrease);
+        }
+        if let Some(value) = updates.shortcut_font_size_reset {
+            self.shortcuts.font_size_reset =
+                sanitize_shortcut(&value, &self.shortcuts.font_size_reset);
         }
     }
 
@@ -450,6 +489,18 @@ impl AppConfig {
             }
             if let Some(value) = shortcuts.quit.as_deref() {
                 self.shortcuts.quit = sanitize_shortcut(value, &self.shortcuts.quit);
+            }
+            if let Some(value) = shortcuts.font_size_increase.as_deref() {
+                self.shortcuts.font_size_increase =
+                    sanitize_shortcut(value, &self.shortcuts.font_size_increase);
+            }
+            if let Some(value) = shortcuts.font_size_decrease.as_deref() {
+                self.shortcuts.font_size_decrease =
+                    sanitize_shortcut(value, &self.shortcuts.font_size_decrease);
+            }
+            if let Some(value) = shortcuts.font_size_reset.as_deref() {
+                self.shortcuts.font_size_reset =
+                    sanitize_shortcut(value, &self.shortcuts.font_size_reset);
             }
         }
 
@@ -698,6 +749,9 @@ impl From<&AppConfig> for FileConfig {
                 next_tab: Some(config.shortcuts.next_tab.clone()),
                 prev_tab: Some(config.shortcuts.prev_tab.clone()),
                 quit: Some(config.shortcuts.quit.clone()),
+                font_size_increase: Some(config.shortcuts.font_size_increase.clone()),
+                font_size_decrease: Some(config.shortcuts.font_size_decrease.clone()),
+                font_size_reset: Some(config.shortcuts.font_size_reset.clone()),
             }),
             ssh_profiles: if config.ssh_profiles.is_empty() {
                 None
@@ -741,7 +795,7 @@ fn ensure_config_file(path: &Path) -> std::io::Result<()> {
 
 fn default_config_toml() -> String {
     format!(
-        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\nfont_selection = \"\"\nfont_size = {font_size:.1}\npadding_x = {padding_x:.1}\npadding_y = {padding_y:.1}\n\n[theme]\ncolor_scheme = \"Catppuccin Mocha\"\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_radius = {macos_blur_radius}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\n",
+        "[ui]\nwindow_width = {width}\nwindow_height = {height}\n\n[terminal]\nfont_selection = \"\"\nfont_size = {font_size:.1}\npadding_x = {padding_x:.1}\npadding_y = {padding_y:.1}\n\n[theme]\ncolor_scheme = \"Catppuccin Mocha\"\nforeground = \"#{fg:02x}{fg_g:02x}{fg_b:02x}\"\nbackground = \"#{bg:02x}{bg_g:02x}{bg_b:02x}\"\ncursor = \"#{cur:02x}{cur_g:02x}{cur_b:02x}\"\nbackground_opacity = {opacity:.2}\nblur_enabled = {blur_enabled}\nmacos_blur_radius = {macos_blur_radius}\n\n[shortcuts]\nnew_tab = \"{shortcut_new_tab}\"\nclose_tab = \"{shortcut_close_tab}\"\nopen_settings = \"{shortcut_open_settings}\"\nnext_tab = \"{shortcut_next_tab}\"\nprev_tab = \"{shortcut_prev_tab}\"\nquit = \"{shortcut_quit}\"\nfont_size_increase = \"{shortcut_font_size_increase}\"\nfont_size_decrease = \"{shortcut_font_size_decrease}\"\nfont_size_reset = \"{shortcut_font_size_reset}\"\n",
         width = DEFAULT_WINDOW_WIDTH as u32,
         height = DEFAULT_WINDOW_HEIGHT as u32,
         font_size = DEFAULT_TERMINAL_FONT_SIZE,
@@ -764,7 +818,10 @@ fn default_config_toml() -> String {
         shortcut_open_settings = DEFAULT_SHORTCUT_OPEN_SETTINGS,
         shortcut_next_tab = DEFAULT_SHORTCUT_NEXT_TAB,
         shortcut_prev_tab = DEFAULT_SHORTCUT_PREV_TAB,
-        shortcut_quit = DEFAULT_SHORTCUT_QUIT
+        shortcut_quit = DEFAULT_SHORTCUT_QUIT,
+        shortcut_font_size_increase = DEFAULT_SHORTCUT_FONT_SIZE_INCREASE,
+        shortcut_font_size_decrease = DEFAULT_SHORTCUT_FONT_SIZE_DECREASE,
+        shortcut_font_size_reset = DEFAULT_SHORTCUT_FONT_SIZE_RESET
     )
 }
 
