@@ -11,6 +11,10 @@ use crate::gui::components::{button_primary, panel, tab_bar};
 use crate::gui::render::TerminalProgram;
 use iced::widget::{column, container, image, row, scrollable, stack, text};
 use iced::{Alignment, Element, Length};
+use std::sync::LazyLock;
+
+static LOGO_HANDLE: LazyLock<image::Handle> =
+    LazyLock::new(|| image::Handle::from_bytes(&include_bytes!("../../../../assets/logo.png")[..]));
 
 impl App {
     pub fn view(&self) -> Element<'_, Message> {
@@ -48,9 +52,7 @@ impl App {
         } else if let Some(active_tab) = self.tabs.get(self.active_tab) {
             self.view_terminal(active_tab)
         } else {
-            let logo_handle =
-                image::Handle::from_bytes(&include_bytes!("../../../../assets/logo.png")[..]);
-            let logo = image(logo_handle)
+            let logo = image(LOGO_HANDLE.clone())
                 .width(Length::Fixed(96.0))
                 .height(Length::Fixed(96.0));
             let version_label = text(format!("RabbiTTY v{}", env!("CARGO_PKG_VERSION")))
