@@ -6,7 +6,7 @@ use iced::widget::{button, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 pub fn tab_bar<'a>(
-    tabs: impl Iterator<Item = (&'a str, usize, bool)>, // (title, index, is_active)
+    tabs: impl Iterator<Item = (&'a str, usize, bool)>,
     on_add: Message,
     on_settings: Message,
     bar_alpha: f32,
@@ -21,25 +21,35 @@ pub fn tab_bar<'a>(
         tab_elements.push(tab_item);
     }
 
-    let add_btn = button(text("+").size(14))
-        .on_press(on_add)
-        .padding([4, 7])
-        .style(
-            move |_theme: &Theme, status: button::Status| button::Style {
-                background: Some(Background::Color(Color::TRANSPARENT)),
-                text_color: match status {
-                    button::Status::Hovered => palette.text,
-                    _ => palette.text_secondary,
-                },
-                border: Border {
-                    radius: 6.0.into(),
-                    width: 0.0,
-                    color: Color::TRANSPARENT,
-                },
-                shadow: iced::Shadow::default(),
-                snap: true,
+    let icon_style = move |_theme: &Theme, status: button::Status| button::Style {
+        background: Some(Background::Color(match status {
+            button::Status::Hovered => Color {
+                a: 0.1,
+                ..palette.text
             },
-        );
+            _ => Color::TRANSPARENT,
+        })),
+        text_color: match status {
+            button::Status::Hovered => palette.text,
+            _ => palette.text_secondary,
+        },
+        border: Border {
+            radius: 6.0.into(),
+            width: 0.0,
+            color: Color::TRANSPARENT,
+        },
+        shadow: iced::Shadow::default(),
+        snap: true,
+    };
+
+    let add_btn = button(text("+").size(13))
+        .on_press(on_add)
+        .padding([6, 10])
+        .style(icon_style);
+    let settings_btn = button(text("⚙").size(13))
+        .on_press(on_settings)
+        .padding([6, 10])
+        .style(icon_style);
 
     let tabs_row = row(tab_elements)
         .spacing(2)
@@ -56,26 +66,6 @@ pub fn tab_bar<'a>(
         .width(Length::Fill)
         .height(Length::Shrink);
 
-    let settings_btn = button(text("⚙").size(12))
-        .on_press(on_settings)
-        .padding([4, 7])
-        .style(
-            move |_theme: &Theme, status: button::Status| button::Style {
-                background: Some(Background::Color(Color::TRANSPARENT)),
-                text_color: match status {
-                    button::Status::Hovered => palette.text,
-                    _ => palette.text_secondary,
-                },
-                border: Border {
-                    radius: 6.0.into(),
-                    width: 0.0,
-                    color: Color::TRANSPARENT,
-                },
-                shadow: iced::Shadow::default(),
-                snap: true,
-            },
-        );
-
     // macOS: left control buttons
     #[cfg(target_os = "macos")]
     let left_padding = 80.0;
@@ -87,78 +77,43 @@ pub fn tab_bar<'a>(
     // Windows: right control buttons
     #[cfg(target_os = "windows")]
     let window_controls = {
-        let minimize_btn = button(text("─").size(12))
-            .on_press(Message::WindowMinimize)
-            .padding([6, 12])
-            .style(
-                move |_theme: &Theme, status: button::Status| button::Style {
-                    background: match status {
-                        button::Status::Hovered => Some(Background::Color(Color {
-                            a: 0.2,
-                            ..palette.text
-                        })),
-                        _ => Some(Background::Color(Color::TRANSPARENT)),
-                    },
-                    text_color: palette.text_secondary,
-                    border: Border {
-                        radius: 0.0.into(),
-                        width: 0.0,
-                        color: Color::TRANSPARENT,
-                    },
-                    shadow: iced::Shadow::default(),
-                    snap: true,
-                },
-            );
+        let hover_subtle = Color {
+            a: 0.15,
+            ..palette.text
+        };
+        let hover_close = Color::from_rgb(0.9, 0.2, 0.2);
 
-        let maximize_btn = button(text("□").size(12))
-            .on_press(Message::WindowMaximize)
-            .padding([6, 12])
-            .style(
-                move |_theme: &Theme, status: button::Status| button::Style {
-                    background: match status {
-                        button::Status::Hovered => Some(Background::Color(Color {
-                            a: 0.2,
-                            ..palette.text
-                        })),
-                        _ => Some(Background::Color(Color::TRANSPARENT)),
-                    },
-                    text_color: palette.text_secondary,
-                    border: Border {
-                        radius: 0.0.into(),
-                        width: 0.0,
-                        color: Color::TRANSPARENT,
-                    },
-                    shadow: iced::Shadow::default(),
-                    snap: true,
+        let win_style = move |hover_color: Color| {
+            move |_theme: &Theme, status: button::Status| button::Style {
+                background: match status {
+                    button::Status::Hovered => Some(Background::Color(hover_color)),
+                    _ => Some(Background::Color(Color::TRANSPARENT)),
                 },
-            );
-
-        let close_btn = button(text("✕").size(12))
-            .on_press(Message::Exit)
-            .padding([6, 12])
-            .style(
-                move |_theme: &Theme, status: button::Status| button::Style {
-                    background: match status {
-                        button::Status::Hovered => {
-                            Some(Background::Color(Color::from_rgb(0.9, 0.2, 0.2)))
-                        }
-                        _ => Some(Background::Color(Color::TRANSPARENT)),
-                    },
-                    text_color: match status {
-                        button::Status::Hovered => Color::WHITE,
-                        _ => palette.text_secondary,
-                    },
-                    border: Border {
-                        radius: 0.0.into(),
-                        width: 0.0,
-                        color: Color::TRANSPARENT,
-                    },
-                    shadow: iced::Shadow::default(),
-                    snap: true,
+                text_color: match status {
+                    button::Status::Hovered => Color::WHITE,
+                    _ => palette.text_secondary,
                 },
-            );
+                border: Border::default(),
+                shadow: iced::Shadow::default(),
+                snap: true,
+            }
+        };
 
-        row![minimize_btn, maximize_btn, close_btn].spacing(0)
+        row![
+            button(text("─").size(12))
+                .on_press(Message::WindowMinimize)
+                .padding([6, 12])
+                .style(win_style(hover_subtle)),
+            button(text("□").size(12))
+                .on_press(Message::WindowMaximize)
+                .padding([6, 12])
+                .style(win_style(hover_subtle)),
+            button(text("✕").size(12))
+                .on_press(Message::Exit)
+                .padding([6, 12])
+                .style(win_style(hover_close)),
+        ]
+        .spacing(0)
     };
 
     #[cfg(target_os = "windows")]
@@ -178,12 +133,16 @@ pub fn tab_bar<'a>(
                 a: bar_alpha,
                 ..palette.surface
             })),
+            border: Border {
+                radius: 0.0.into(),
+                width: 0.0,
+                color: Color::TRANSPARENT,
+            },
             ..Default::default()
         })
         .padding(padding)
         .width(Length::Fill);
 
-    // Windows: Enable window dragging by clicking on the tab bar background
     #[cfg(target_os = "windows")]
     return mouse_area(tab_bar_container)
         .on_press(Message::WindowDrag)
@@ -208,21 +167,27 @@ fn browser_tab<'a>(
     } else {
         title.into()
     };
-    let tab_text = text(display_title).size(13);
+    let tab_text = text(display_title).size(12);
 
-    let close_btn = button(text("✕").size(10))
+    let close_btn = button(text("✕").size(9))
         .on_press(Message::CloseTab(index))
-        .padding([2, 4])
+        .padding([2, 5])
         .style(
             move |_theme: &Theme, status: button::Status| button::Style {
                 background: match status {
                     button::Status::Hovered => Some(Background::Color(Color {
-                        a: 0.2,
+                        a: 0.15,
                         ..palette.text
                     })),
                     _ => Some(Background::Color(Color::TRANSPARENT)),
                 },
-                text_color: palette.text_secondary,
+                text_color: match status {
+                    button::Status::Hovered => palette.text,
+                    _ => Color {
+                        a: 0.5,
+                        ..palette.text_secondary
+                    },
+                },
                 border: Border {
                     radius: 4.0.into(),
                     width: 0.0,
@@ -234,44 +199,63 @@ fn browser_tab<'a>(
         );
 
     let tab_content = row![tab_text, close_btn]
-        .spacing(8)
+        .spacing(6)
         .align_y(iced::Alignment::Center);
 
     let inactive_alpha = tab_alpha.clamp(0.0, 1.0);
-    let hover_alpha = (inactive_alpha + 0.15).min(1.0);
     let tab_button = button(tab_content)
         .on_press(Message::TabSelected(index))
-        .padding([8, 12])
+        .padding([6, 12])
         .style(move |_theme: &Theme, status: button::Status| {
-            let (bg_color, text_color) = if is_active {
-                (
-                    Color {
+            if is_active {
+                button::Style {
+                    background: Some(Background::Color(Color {
                         a: inactive_alpha,
                         ..palette.background
-                    },
-                    palette.text,
-                )
+                    })),
+                    text_color: palette.text,
+                    border: Border::default(),
+                    shadow: iced::Shadow::default(),
+                    snap: false,
+                }
             } else {
-                let hover_bg = match status {
-                    button::Status::Hovered => Color {
-                        a: hover_alpha,
-                        ..palette.background
+                let hovered = matches!(status, button::Status::Hovered);
+                button::Style {
+                    background: Some(Background::Color(if hovered {
+                        Color {
+                            a: 0.08,
+                            ..palette.text
+                        }
+                    } else {
+                        Color::TRANSPARENT
+                    })),
+                    text_color: if hovered {
+                        palette.text
+                    } else {
+                        palette.text_secondary
                     },
-                    _ => Color {
-                        a: inactive_alpha,
-                        ..palette.background
-                    },
-                };
-                (hover_bg, palette.text_secondary)
-            };
-
-            button::Style {
-                background: Some(Background::Color(bg_color)),
-                text_color,
-                shadow: iced::Shadow::default(),
-                ..Default::default()
+                    border: Border::default(),
+                    shadow: iced::Shadow::default(),
+                    snap: false,
+                }
             }
         });
 
-    tab_button.into()
+    if is_active {
+        // Active tab with bottom accent indicator
+        let indicator =
+            container(text(""))
+                .width(Length::Fill)
+                .height(2)
+                .style(move |_theme: &Theme| container::Style {
+                    background: Some(Background::Color(palette.accent)),
+                    ..Default::default()
+                });
+
+        iced::widget::column![tab_button, indicator]
+            .width(Length::Shrink)
+            .into()
+    } else {
+        tab_button.into()
+    }
 }

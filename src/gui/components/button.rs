@@ -1,96 +1,92 @@
-use crate::gui::theme::{Palette, RADIUS_NORMAL};
+use crate::gui::theme::Palette;
 use iced::widget::button;
-use iced::{Background, Border, Color, Theme};
+use iced::{Background, Border, Color, Shadow, Theme};
+
+const RADIUS: f32 = 6.0;
 
 pub fn primary(text: &str) -> button::Button<'_, crate::gui::app::Message> {
-    button(text).style(|_theme: &Theme, status: button::Status| {
-        let palette = Palette::DARK;
-        let base = button::Style {
-            background: Some(Background::Color(palette.accent)),
-            text_color: palette.background,
-            border: Border {
-                radius: RADIUS_NORMAL.into(),
-                width: 0.0,
-                color: Color::TRANSPARENT,
-            },
-            shadow: iced::Shadow::default(),
-            snap: true,
-        };
-
-        match status {
-            button::Status::Active => base,
-            button::Status::Hovered => button::Style {
-                background: Some(Background::Color(Color {
-                    a: 0.9,
+    button(iced::widget::text(text).size(13))
+        .padding([7, 16])
+        .style(|_theme: &Theme, status: button::Status| {
+            let palette = Palette::DARK;
+            let bg = match status {
+                button::Status::Hovered => Color {
+                    r: palette.accent.r * 1.1,
+                    g: palette.accent.g * 1.1,
+                    b: palette.accent.b * 1.1,
+                    a: 1.0,
+                },
+                button::Status::Pressed => Color {
+                    a: 0.85,
                     ..palette.accent
-                })),
-                ..base
-            },
-            button::Status::Pressed => button::Style {
-                background: Some(Background::Color(Color {
-                    a: 0.8,
-                    ..palette.accent
-                })),
-                ..base
-            },
-            button::Status::Disabled => button::Style {
-                background: Some(Background::Color(palette.surface)),
-                text_color: palette.text_secondary,
-                ..base
-            },
-        }
-    })
+                },
+                button::Status::Disabled => palette.surface,
+                _ => palette.accent,
+            };
+            let text_color = match status {
+                button::Status::Disabled => palette.text_secondary,
+                _ => palette.background,
+            };
+            button::Style {
+                background: Some(Background::Color(bg)),
+                text_color,
+                border: Border {
+                    radius: RADIUS.into(),
+                    width: 0.0,
+                    color: Color::TRANSPARENT,
+                },
+                shadow: Shadow::default(),
+                snap: true,
+            }
+        })
 }
 
 pub fn secondary(text: &str) -> button::Button<'_, crate::gui::app::Message> {
-    button(text).style(|_theme: &Theme, status: button::Status| {
-        let palette = Palette::DARK;
-        let base = button::Style {
-            background: Some(Background::Color(palette.surface)),
-            text_color: palette.text,
-            border: Border {
-                radius: RADIUS_NORMAL.into(),
-                width: 1.0,
-                color: Color {
-                    a: 0.1,
-                    ..palette.text
-                },
-            },
-            shadow: iced::Shadow::default(),
-            snap: true,
-        };
-
-        match status {
-            button::Status::Active => base,
-            button::Status::Hovered => button::Style {
-                background: Some(Background::Color(Color {
-                    a: 0.8, // Slightly lighter/transparent
-                    ..palette.surface
-                })),
-                border: Border {
-                    color: Color {
-                        a: 0.3,
+    button(iced::widget::text(text).size(13))
+        .padding([7, 16])
+        .style(|_theme: &Theme, status: button::Status| {
+            let palette = Palette::DARK;
+            let (bg, border_alpha) = match status {
+                button::Status::Hovered => (
+                    Color {
+                        a: 0.12,
                         ..palette.text
                     },
-                    ..base.border
+                    0.2,
+                ),
+                button::Status::Pressed => (
+                    Color {
+                        a: 0.08,
+                        ..palette.text
+                    },
+                    0.25,
+                ),
+                button::Status::Disabled => (
+                    Color {
+                        a: 0.04,
+                        ..palette.text
+                    },
+                    0.05,
+                ),
+                _ => (Color::TRANSPARENT, 0.1),
+            };
+            let text_color = match status {
+                button::Status::Disabled => palette.text_secondary,
+                _ => palette.text,
+            };
+            button::Style {
+                background: Some(Background::Color(bg)),
+                text_color,
+                border: Border {
+                    radius: RADIUS.into(),
+                    width: 1.0,
+                    color: Color {
+                        a: border_alpha,
+                        ..palette.text
+                    },
                 },
-                ..base
-            },
-            button::Status::Pressed => button::Style {
-                background: Some(Background::Color(Color {
-                    a: 0.6,
-                    ..palette.surface
-                })),
-                ..base
-            },
-            button::Status::Disabled => button::Style {
-                text_color: palette.text_secondary,
-                background: Some(Background::Color(Color {
-                    a: 0.5,
-                    ..palette.surface
-                })),
-                ..base
-            },
-        }
-    })
+                shadow: Shadow::default(),
+                snap: true,
+            }
+        })
 }

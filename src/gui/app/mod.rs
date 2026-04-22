@@ -5,6 +5,7 @@ use crate::gui::settings::{
 use crate::gui::tab::{ShellKind, TerminalTab, discover_available_shells};
 use crate::session::OutputEvent;
 use crate::terminal::font::discover_system_terminal_fonts;
+use iced::Animation;
 use iced::Size;
 use iced::futures::channel::mpsc;
 use iced::keyboard::{Key, Modifiers};
@@ -69,6 +70,7 @@ pub enum Message {
 
     WindowResized(Size),
     ResizeDebounce,
+    AnimationTick,
     ApplyWindowStyle,
 
     FontSelected(TerminalFontOption),
@@ -105,6 +107,7 @@ pub struct App {
     pub(super) resize_debounce_pending: bool,
     pub(super) resize_debounce_seq: u64,
     pub(super) resize_debounce_spawned_seq: u64,
+    pub(super) shell_picker_anim: Animation<bool>,
     pub(super) window_style_applied: bool,
     #[cfg(target_os = "macos")]
     pub(super) show_restart_confirm: bool,
@@ -145,6 +148,9 @@ impl App {
             resize_debounce_pending: false,
             resize_debounce_seq: 0,
             resize_debounce_spawned_seq: 0,
+            shell_picker_anim: Animation::new(false)
+                .duration(std::time::Duration::from_millis(250))
+                .easing(iced::animation::Easing::EaseOutQuint),
             window_style_applied: false,
             #[cfg(target_os = "macos")]
             show_restart_confirm: false,
