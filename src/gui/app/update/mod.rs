@@ -6,6 +6,7 @@ use super::{App, Message, SETTINGS_TAB_INDEX};
 use crate::gui::settings::{SettingsDraft, SettingsField};
 use crate::gui::tab::ShellKind;
 use iced::keyboard::{Key, key::Named};
+use iced::time::Instant;
 use iced::{Task, widget};
 use std::sync::LazyLock;
 
@@ -31,10 +32,10 @@ impl App {
             Message::OpenShellPicker => {
                 self.show_shell_picker = true;
                 self.shell_picker_selected = 0;
+                self.shell_picker_anim.go_mut(true, Instant::now());
             }
             Message::CloseShellPicker => {
-                self.show_shell_picker = false;
-                self.shell_picker_selected = 0;
+                self.shell_picker_anim.go_mut(false, Instant::now());
             }
             Message::CreateTab(shell) => {
                 return self.create_tab(shell);
@@ -238,6 +239,13 @@ impl App {
             Message::WindowResized(size) => {
                 return self.handle_window_resized(size);
             }
+            Message::AnimationTick => {
+                let now = Instant::now();
+                if !self.shell_picker_anim.is_animating(now) && !self.shell_picker_anim.value() {
+                    self.show_shell_picker = false;
+                    self.shell_picker_selected = 0;
+                }
+            }
             Message::ResizeDebounce => {
                 if self.resize_debounce_seq != self.resize_debounce_spawned_seq {
                     // New resizes arrived during the wait -> restart timer
@@ -286,8 +294,7 @@ impl App {
         if self.show_shell_picker {
             match key {
                 Key::Named(Named::Escape) => {
-                    self.show_shell_picker = false;
-                    self.shell_picker_selected = 0;
+                    return self.update(Message::CloseShellPicker);
                 }
                 Key::Named(Named::ArrowUp) => {
                     self.shift_shell_picker_selection(-1);

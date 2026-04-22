@@ -88,11 +88,7 @@ impl App {
         let action = ShortcutAction::resolve(key, modifiers, &self.config.shortcuts)?;
 
         match action {
-            ShortcutAction::NewTab => {
-                self.show_shell_picker = true;
-                self.shell_picker_selected = 0;
-                Some(Task::none())
-            }
+            ShortcutAction::NewTab => Some(self.update(Message::OpenShellPicker)),
             ShortcutAction::CloseTab => {
                 self.close_active_target();
                 Some(Task::none())

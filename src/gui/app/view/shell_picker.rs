@@ -1,7 +1,8 @@
 use super::super::{App, Message};
 use crate::gui::tab::ShellKind;
 use crate::gui::theme::{Palette, RADIUS_NORMAL, RADIUS_SMALL, SPACING_SMALL};
-use iced::widget::{button, center, column, container, mouse_area, stack, text};
+use iced::time::Instant;
+use iced::widget::{button, column, container, mouse_area, stack, text};
 use iced::{Background, Border, Color, Element, Length};
 
 const PICKER_WIDTH: f32 = 280.0;
@@ -12,17 +13,22 @@ impl App {
         base_layout: impl Into<Element<'a, Message>>,
     ) -> Element<'a, Message> {
         let palette = Palette::DARK;
+        let now = Instant::now();
+
+        let progress: f32 = self.shell_picker_anim.interpolate(0.0f32, 1.0f32, now);
+
+        let backdrop_alpha = 0.5 * progress;
 
         let backdrop = mouse_area(
             container(text(""))
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .style(|_theme: &iced::Theme| container::Style {
+                .style(move |_theme: &iced::Theme| container::Style {
                     background: Some(Background::Color(Color {
                         r: 0.0,
                         g: 0.0,
                         b: 0.0,
-                        a: 0.4,
+                        a: backdrop_alpha,
                     })),
                     ..Default::default()
                 }),
@@ -36,13 +42,16 @@ impl App {
         items.push(
             text("Start New Session")
                 .size(15)
-                .color(palette.text)
+                .color(Color {
+                    a: progress,
+                    ..palette.text
+                })
                 .into(),
         );
-        items.push(divider());
+        items.push(divider_with_alpha(progress));
 
         // Shell section
-        items.push(section_label("Shells"));
+        items.push(section_label("Shells", progress));
 
         for shell in &self.available_shells {
             let label = shell.display_name();
@@ -57,14 +66,15 @@ impl App {
                 subtitle,
                 selected,
                 Message::CreateTab(shell.clone()),
+                progress,
             ));
             option_index += 1;
         }
 
         // SSH section
         if !self.config.ssh_profiles.is_empty() {
-            items.push(divider());
-            items.push(section_label("SSH"));
+            items.push(divider_with_alpha(progress));
+            items.push(section_label("SSH", progress));
 
             for (i, profile) in self.config.ssh_profiles.iter().enumerate() {
                 let label = if profile.name.is_empty() {
@@ -86,10 +96,14 @@ impl App {
                     subtitle,
                     selected,
                     Message::CreateSshTab(i),
+                    progress,
                 ));
                 option_index += 1;
             }
         }
+
+        let card_alpha = 0.98 * progress;
+        let border_alpha = 0.15 * progress;
 
         let popup_card = container(
             column(items)
@@ -102,20 +116,28 @@ impl App {
                 r: palette.surface.r * 0.9,
                 g: palette.surface.g * 0.9,
                 b: palette.surface.b * 0.9,
-                a: 0.98,
+                a: card_alpha,
             })),
             border: Border {
                 radius: (RADIUS_NORMAL + 4.0).into(),
                 width: 1.0,
                 color: Color {
-                    a: 0.15,
+                    a: border_alpha,
                     ..palette.text
                 },
             },
             ..Default::default()
         });
 
-        let centered_popup = center(popup_card).width(Length::Fill).height(Length::Fill);
+        // Slide up: start 16px below center, ease to 0
+        let slide_offset = 16.0 * (1.0 - progress);
+        let centered_popup: Element<Message> = container(popup_card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .padding(iced::Padding::new(0.0).top(slide_offset))
+            .into();
 
         stack![base_layout.into(), backdrop, centered_popup]
             .width(Length::Fill)
@@ -124,19 +146,25 @@ impl App {
     }
 }
 
-fn section_label(label: &str) -> Element<'_, Message> {
+fn section_label(label: &str, alpha: f32) -> Element<'_, Message> {
     let palette = Palette::DARK;
-    text(label).size(11).color(palette.text_secondary).into()
+    text(label)
+        .size(11)
+        .color(Color {
+            a: alpha * 0.7,
+            ..palette.text_secondary
+        })
+        .into()
 }
 
-fn divider() -> Element<'static, Message> {
+fn divider_with_alpha(alpha: f32) -> Element<'static, Message> {
     let palette = Palette::DARK;
     container(text(""))
         .width(Length::Fill)
         .height(1)
         .style(move |_theme: &iced::Theme| container::Style {
             background: Some(Background::Color(Color {
-                a: 0.1,
+                a: 0.1 * alpha,
                 ..palette.text
             })),
             ..Default::default()
@@ -149,6 +177,7 @@ fn picker_item(
     subtitle: Option<String>,
     selected: bool,
     on_press: Message,
+    alpha: f32,
 ) -> Element<'static, Message> {
     let palette = Palette::DARK;
 
@@ -156,9 +185,15 @@ fn picker_item(
         text(label)
             .size(13)
             .color(if selected {
-                palette.background
+                Color {
+                    a: alpha,
+                    ..palette.background
+                }
             } else {
-                palette.text
+                Color {
+                    a: alpha,
+                    ..palette.text
+                }
             })
             .into(),
     ];
@@ -169,11 +204,14 @@ fn picker_item(
                 .size(10)
                 .color(if selected {
                     Color {
-                        a: 0.7,
+                        a: 0.7 * alpha,
                         ..palette.background
                     }
                 } else {
-                    palette.text_secondary
+                    Color {
+                        a: alpha * 0.7,
+                        ..palette.text_secondary
+                    }
                 })
                 .into(),
         );
@@ -187,34 +225,43 @@ fn picker_item(
                 let hovered = matches!(status, iced::widget::button::Status::Hovered);
                 if selected {
                     iced::widget::button::Style {
-                        background: Some(Background::Color(palette.accent)),
-                        text_color: palette.background,
+                        background: Some(Background::Color(Color {
+                            a: alpha,
+                            ..palette.accent
+                        })),
+                        text_color: Color {
+                            a: alpha,
+                            ..palette.background
+                        },
                         border: Border {
                             radius: RADIUS_SMALL.into(),
                             width: 0.0,
                             color: Color::TRANSPARENT,
                         },
                         shadow: iced::Shadow::default(),
-                        snap: true,
+                        snap: false,
                     }
                 } else {
                     iced::widget::button::Style {
                         background: Some(Background::Color(if hovered {
                             Color {
-                                a: 0.08,
+                                a: 0.08 * alpha,
                                 ..palette.text
                             }
                         } else {
                             Color::TRANSPARENT
                         })),
-                        text_color: palette.text,
+                        text_color: Color {
+                            a: alpha,
+                            ..palette.text
+                        },
                         border: Border {
                             radius: RADIUS_SMALL.into(),
                             width: 0.0,
                             color: Color::TRANSPARENT,
                         },
                         shadow: iced::Shadow::default(),
-                        snap: true,
+                        snap: false,
                     }
                 }
             },

@@ -3,11 +3,22 @@ use iced::futures::StreamExt;
 use iced::futures::channel::mpsc;
 use iced::futures::sink::SinkExt;
 use iced::stream;
-use iced::{Event, Subscription, event, keyboard, mouse, window};
+use iced::time::Instant;
+use iced::{Event, Subscription, event, keyboard, mouse, time, window};
 
 impl App {
     pub fn subscription(&self) -> Subscription<Message> {
+        let now = Instant::now();
+        let has_animation = self.shell_picker_anim.is_animating(now);
+
+        let animation_tick = if has_animation {
+            time::every(std::time::Duration::from_millis(16)).map(|_| Message::AnimationTick)
+        } else {
+            Subscription::none()
+        };
+
         Subscription::batch([
+            animation_tick,
             Subscription::run(|| {
                 stream::channel(100, async |mut output| {
                     let (sender, mut receiver) = mpsc::channel(100);
