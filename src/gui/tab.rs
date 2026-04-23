@@ -395,7 +395,7 @@ impl SshProfile {
         LaunchSpec {
             program: "ssh".to_string(),
             args,
-            env: vec![],
+            env: vec![("TERM".to_string(), "xterm-256color".to_string())],
             rows: size.lines as u16,
             cols: size.columns as u16,
         }
