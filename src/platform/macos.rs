@@ -17,10 +17,6 @@ pub fn apply_style(handle: WindowHandle<'_>, theme: &ThemeConfig) {
 }
 
 fn apply_style_inner(handle: WindowHandle<'_>, theme: &ThemeConfig) {
-    if !theme.blur_enabled {
-        return;
-    }
-
     let RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
         return;
     };
@@ -29,6 +25,16 @@ fn apply_style_inner(handle: WindowHandle<'_>, theme: &ThemeConfig) {
     let Some(window) = view.window() else {
         return;
     };
+
+    // Prevent macOS from treating the title bar / content area as a drag
+    // handle.  We manage window dragging explicitly via iced's window::drag
+    // on the tab bar's empty space instead.
+    window.setMovable(false);
+    window.setMovableByWindowBackground(false);
+
+    if !theme.blur_enabled {
+        return;
+    }
 
     // Make window non opaque with clear background so blur shows through
     window.setOpaque(false);

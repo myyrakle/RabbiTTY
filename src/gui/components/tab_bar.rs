@@ -1,6 +1,5 @@
 use crate::gui::app::Message;
 use crate::gui::theme::Palette;
-#[cfg(target_os = "windows")]
 use iced::widget::mouse_area;
 use iced::widget::{button, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
@@ -18,6 +17,10 @@ pub fn tab_bar<'a>(
 
     for (title, index, is_active) in tabs {
         let tab_item = browser_tab(title, index, is_active, tab_alpha);
+        let tab_item = mouse_area(tab_item)
+            .on_press(Message::TabSelected(index))
+            .on_enter(Message::TabDragHover(index))
+            .into();
         tab_elements.push(tab_item);
     }
 
@@ -143,12 +146,12 @@ pub fn tab_bar<'a>(
         .padding(padding)
         .width(Length::Fill);
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     return mouse_area(tab_bar_container)
         .on_press(Message::WindowDrag)
         .into();
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     tab_bar_container.into()
 }
 
@@ -203,10 +206,8 @@ fn browser_tab<'a>(
         .align_y(iced::Alignment::Center);
 
     let inactive_alpha = tab_alpha.clamp(0.0, 1.0);
-    let tab_button = button(tab_content)
-        .on_press(Message::TabSelected(index))
-        .padding([6, 12])
-        .style(move |_theme: &Theme, status: button::Status| {
+    let tab_button = button(tab_content).padding([6, 12]).style(
+        move |_theme: &Theme, status: button::Status| {
             if is_active {
                 button::Style {
                     background: Some(Background::Color(Color {
@@ -239,7 +240,8 @@ fn browser_tab<'a>(
                     snap: false,
                 }
             }
-        });
+        },
+    );
 
     if is_active {
         // Active tab with bottom accent indicator

@@ -21,6 +21,8 @@ pub(super) const SETTINGS_TAB_INDEX: usize = usize::MAX;
 #[derive(Clone)]
 pub enum Message {
     TabSelected(usize),
+    TabDragHover(usize),
+    TabDragRelease,
     CloseTab(usize),
     OpenShellPicker,
     CloseShellPicker,
@@ -80,7 +82,7 @@ pub enum Message {
     WindowMinimize,
     #[cfg(target_os = "windows")]
     WindowMaximize,
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     WindowDrag,
     Exit,
 }
@@ -103,6 +105,8 @@ pub struct App {
     pub(super) next_tab_id: u64,
     pub(super) tab_bar_scroll_x: f32,
     pub(super) ignore_scrollable_sync: bool,
+    pub(super) dragging_tab: Option<usize>,
+    pub(super) drag_target: Option<usize>,
     pub(super) scroll_accumulator: f32,
     pub(super) resize_debounce_pending: bool,
     pub(super) resize_debounce_seq: u64,
@@ -144,6 +148,8 @@ impl App {
             next_tab_id: 1,
             tab_bar_scroll_x: 0.0,
             ignore_scrollable_sync: false,
+            dragging_tab: None,
+            drag_target: None,
             scroll_accumulator: 0.0,
             resize_debounce_pending: false,
             resize_debounce_seq: 0,
