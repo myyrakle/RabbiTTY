@@ -304,7 +304,9 @@ impl App {
             }
             #[cfg(any(target_os = "windows", target_os = "macos"))]
             Message::WindowDrag => {
-                return iced::window::latest().and_then(iced::window::drag);
+                if self.dragging_tab.is_none() {
+                    return iced::window::latest().and_then(iced::window::drag);
+                }
             }
         }
 
