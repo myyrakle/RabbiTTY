@@ -16,26 +16,12 @@ pub fn tab_bar<'a>(
     let palette = Palette::DARK;
 
     let tabs_data: Vec<_> = tabs.collect();
-
-    // Compute visual display order: preview the reorder during drag
-    let display_order: Vec<usize> = if let (Some(from), Some(target)) = (dragging_tab, drag_target)
-    {
-        if from != target && from < tabs_data.len() && target < tabs_data.len() {
-            let mut order: Vec<usize> = (0..tabs_data.len()).collect();
-            let dragged = order.remove(from);
-            order.insert(target, dragged);
-            order
-        } else {
-            (0..tabs_data.len()).collect()
-        }
-    } else {
-        (0..tabs_data.len()).collect()
-    };
+    let display_order = compute_display_order(tabs_data.len(), dragging_tab, drag_target);
 
     let mut tab_elements: Vec<Element<Message>> = Vec::new();
 
-    for &orig_idx in &display_order {
-        let (title, index, is_active) = tabs_data[orig_idx];
+    for &original_index in &display_order {
+        let (title, index, is_active) = tabs_data[original_index];
         let is_dragging = dragging_tab == Some(index);
         let tab_item = browser_tab(title, index, is_active, tab_alpha, is_dragging);
         let tab_item = mouse_area(tab_item)
@@ -300,4 +286,20 @@ fn browser_tab<'a>(
     } else {
         tab_button.into()
     }
+}
+
+fn compute_display_order(
+    len: usize,
+    dragging_tab: Option<usize>,
+    drag_target: Option<usize>,
+) -> Vec<usize> {
+    if let (Some(from), Some(target)) = (dragging_tab, drag_target) {
+        if from != target && from < len && target < len {
+            let mut order: Vec<usize> = (0..len).collect();
+            let dragged = order.remove(from);
+            order.insert(target, dragged);
+            return order;
+        }
+    }
+    (0..len).collect()
 }
