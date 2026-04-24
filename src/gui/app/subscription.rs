@@ -56,6 +56,9 @@ impl App {
                     modifiers,
                     text: text.map(|s| s.to_string()),
                 }),
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                    Some(Message::TabDragRelease)
+                }
                 Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
                     let (lines_y, pixels_x) = match delta {
                         mouse::ScrollDelta::Lines { x, y } => (y, x * 30.0),

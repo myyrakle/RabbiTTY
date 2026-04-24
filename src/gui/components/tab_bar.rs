@@ -1,6 +1,5 @@
 use crate::gui::app::Message;
 use crate::gui::theme::Palette;
-#[cfg(target_os = "windows")]
 use iced::widget::mouse_area;
 use iced::widget::{button, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
@@ -11,13 +10,24 @@ pub fn tab_bar<'a>(
     on_settings: Message,
     bar_alpha: f32,
     tab_alpha: f32,
+    dragging_tab: Option<usize>,
+    drag_target: Option<usize>,
 ) -> Element<'a, Message> {
     let palette = Palette::DARK;
 
+    let tabs_data: Vec<_> = tabs.collect();
+    let display_order = compute_display_order(tabs_data.len(), dragging_tab, drag_target);
+
     let mut tab_elements: Vec<Element<Message>> = Vec::new();
 
-    for (title, index, is_active) in tabs {
-        let tab_item = browser_tab(title, index, is_active, tab_alpha);
+    for &original_index in &display_order {
+        let (title, index, is_active) = tabs_data[original_index];
+        let is_dragging = dragging_tab == Some(index);
+        let tab_item = browser_tab(title, index, is_active, tab_alpha, is_dragging);
+        let tab_item = mouse_area(tab_item)
+            .on_press(Message::TabSelected(index))
+            .on_enter(Message::TabDragHover(index))
+            .into();
         tab_elements.push(tab_item);
     }
 
@@ -143,12 +153,12 @@ pub fn tab_bar<'a>(
         .padding(padding)
         .width(Length::Fill);
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     return mouse_area(tab_bar_container)
         .on_press(Message::WindowDrag)
         .into();
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     tab_bar_container.into()
 }
 
@@ -157,6 +167,7 @@ fn browser_tab<'a>(
     index: usize,
     is_active: bool,
     tab_alpha: f32,
+    is_dragging: bool,
 ) -> Element<'a, Message> {
     let palette = Palette::DARK;
 
@@ -203,11 +214,27 @@ fn browser_tab<'a>(
         .align_y(iced::Alignment::Center);
 
     let inactive_alpha = tab_alpha.clamp(0.0, 1.0);
-    let tab_button = button(tab_content)
-        .on_press(Message::TabSelected(index))
-        .padding([6, 12])
-        .style(move |_theme: &Theme, status: button::Status| {
-            if is_active {
+    let tab_button = button(tab_content).padding([6, 12]).style(
+        move |_theme: &Theme, status: button::Status| {
+            if is_dragging {
+                button::Style {
+                    background: Some(Background::Color(Color {
+                        a: 0.15,
+                        ..palette.accent
+                    })),
+                    text_color: palette.text,
+                    border: Border {
+                        radius: 4.0.into(),
+                        width: 1.0,
+                        color: Color {
+                            a: 0.5,
+                            ..palette.accent
+                        },
+                    },
+                    shadow: iced::Shadow::default(),
+                    snap: false,
+                }
+            } else if is_active {
                 button::Style {
                     background: Some(Background::Color(Color {
                         a: inactive_alpha,
@@ -239,7 +266,8 @@ fn browser_tab<'a>(
                     snap: false,
                 }
             }
-        });
+        },
+    );
 
     if is_active {
         // Active tab with bottom accent indicator
@@ -258,4 +286,22 @@ fn browser_tab<'a>(
     } else {
         tab_button.into()
     }
+}
+
+fn compute_display_order(
+    len: usize,
+    dragging_tab: Option<usize>,
+    drag_target: Option<usize>,
+) -> Vec<usize> {
+    if let (Some(from), Some(target)) = (dragging_tab, drag_target)
+        && from != target
+        && from < len
+        && target < len
+    {
+        let mut order: Vec<usize> = (0..len).collect();
+        let dragged = order.remove(from);
+        order.insert(target, dragged);
+        return order;
+    }
+    (0..len).collect()
 }

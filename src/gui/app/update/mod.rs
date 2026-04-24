@@ -24,7 +24,33 @@ impl App {
                     self.active_tab = SETTINGS_TAB_INDEX;
                 } else if index < self.tabs.len() {
                     self.active_tab = index;
+                    self.dragging_tab = Some(index);
+                    self.drag_target = None;
                 }
+            }
+            Message::TabDragHover(index) => {
+                if self.dragging_tab.is_some() && index < self.tabs.len() {
+                    self.drag_target = Some(index);
+                }
+            }
+            Message::TabDragRelease => {
+                if let Some(from) = self.dragging_tab.take()
+                    && let Some(target) = self.drag_target.take()
+                    && from != target
+                    && from < self.tabs.len()
+                    && target < self.tabs.len()
+                {
+                    let tab = self.tabs.remove(from);
+                    self.tabs.insert(target, tab);
+                    if self.active_tab == from {
+                        self.active_tab = target;
+                    } else if from < self.active_tab && target >= self.active_tab {
+                        self.active_tab -= 1;
+                    } else if from > self.active_tab && target <= self.active_tab {
+                        self.active_tab += 1;
+                    }
+                }
+                self.drag_target = None;
             }
             Message::CloseTab(index) => {
                 self.handle_close_tab(index);
@@ -276,7 +302,7 @@ impl App {
             Message::WindowMaximize => {
                 return iced::window::latest().and_then(iced::window::toggle_maximize);
             }
-            #[cfg(target_os = "windows")]
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
             Message::WindowDrag => {
                 return iced::window::latest().and_then(iced::window::drag);
             }

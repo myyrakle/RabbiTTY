@@ -45,6 +45,8 @@ impl App {
             Message::OpenSettingsTab,
             bar_alpha,
             tab_alpha,
+            self.dragging_tab,
+            self.drag_target,
         );
 
         let main_content: Element<Message> = if self.active_tab == SETTINGS_TAB_INDEX {
