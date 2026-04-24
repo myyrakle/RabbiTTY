@@ -36,17 +36,20 @@ impl App {
             Message::TabDragRelease => {
                 if let Some(from) = self.dragging_tab.take()
                     && let Some(target) = self.drag_target.take()
-                        && from != target && from < self.tabs.len() && target < self.tabs.len() {
-                            let tab = self.tabs.remove(from);
-                            self.tabs.insert(target, tab);
-                            if self.active_tab == from {
-                                self.active_tab = target;
-                            } else if from < self.active_tab && target >= self.active_tab {
-                                self.active_tab -= 1;
-                            } else if from > self.active_tab && target <= self.active_tab {
-                                self.active_tab += 1;
-                            }
-                        }
+                    && from != target
+                    && from < self.tabs.len()
+                    && target < self.tabs.len()
+                {
+                    let tab = self.tabs.remove(from);
+                    self.tabs.insert(target, tab);
+                    if self.active_tab == from {
+                        self.active_tab = target;
+                    } else if from < self.active_tab && target >= self.active_tab {
+                        self.active_tab -= 1;
+                    } else if from > self.active_tab && target <= self.active_tab {
+                        self.active_tab += 1;
+                    }
+                }
                 self.drag_target = None;
             }
             Message::CloseTab(index) => {
