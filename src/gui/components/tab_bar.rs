@@ -293,13 +293,12 @@ fn compute_display_order(
     dragging_tab: Option<usize>,
     drag_target: Option<usize>,
 ) -> Vec<usize> {
-    if let (Some(from), Some(target)) = (dragging_tab, drag_target) {
-        if from != target && from < len && target < len {
+    if let (Some(from), Some(target)) = (dragging_tab, drag_target)
+        && from != target && from < len && target < len {
             let mut order: Vec<usize> = (0..len).collect();
             let dragged = order.remove(from);
             order.insert(target, dragged);
             return order;
         }
-    }
     (0..len).collect()
 }
