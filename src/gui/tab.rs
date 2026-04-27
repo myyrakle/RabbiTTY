@@ -614,9 +614,7 @@ fn ssh_info_lines(profile: &SshProfile) -> Vec<String> {
             "         \x1b[36mUsing private key from  \x1b[1;4m{identity}\x1b[0m\r\n"
         ));
     } else if profile.password.is_some() {
-        lines.push(
-            "         \x1b[36mUsing saved password\x1b[0m\r\n".to_string(),
-        );
+        lines.push("         \x1b[36mUsing saved password\x1b[0m\r\n".to_string());
     }
 
     lines.push("\r\n".to_string());
