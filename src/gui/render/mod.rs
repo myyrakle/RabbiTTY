@@ -279,7 +279,7 @@ impl Primitive for TerminalPrimitive {
         pipeline.text.update_uniforms(queue, viewport, offset);
         pipeline
             .text
-            .prepare_instances(device, queue, cells, cell_size);
+            .prepare_instances(device, queue, cells, cell_size, self.selection.as_ref());
     }
 
     fn render(

@@ -300,6 +300,7 @@ impl TextPipelineData {
         queue: &wgpu::Queue,
         cells: &[CellVisual],
         cell_size: [f32; 2],
+        selection: Option<&crate::terminal::Selection>,
     ) {
         let cell_width = cell_size[0];
         let cell_height = cell_size[1];
@@ -345,13 +346,18 @@ impl TextPipelineData {
             let origin_y = cell_y + top_margin - self.line_min_y;
             let pos = [origin_x + info.bearing[0], origin_y + info.bearing[1]];
 
+            let bg_color = if selection.is_some_and(|s| s.contains(cell.row, cell.col)) {
+                super::SELECTION_BG
+            } else {
+                cell.bg
+            };
             self.glyph_instances.push(GlyphInstance {
                 pos,
                 size: info.size,
                 uv_min: info.uv_min,
                 uv_max: info.uv_max,
                 color: cell.fg,
-                bg_color: cell.bg,
+                bg_color,
             });
         }
 
