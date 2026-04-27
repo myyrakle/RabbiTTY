@@ -21,7 +21,7 @@ impl App {
             animation_tick,
             Subscription::run(|| {
                 stream::channel(100, async |mut output| {
-                    let (sender, mut receiver) = mpsc::channel(100);
+                    let (sender, mut receiver) = mpsc::unbounded();
                     let _ = output.send(Message::PtySenderReady(sender)).await;
 
                     while let Some(first) = receiver.next().await {

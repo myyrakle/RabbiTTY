@@ -42,7 +42,7 @@ pub enum Message {
     ConfirmRestartForBlur,
     #[cfg(target_os = "macos")]
     CancelRestartForBlur,
-    PtySenderReady(mpsc::Sender<OutputEvent>),
+    PtySenderReady(mpsc::UnboundedSender<OutputEvent>),
     PtyOutput(OutputEvent),
     PtyOutputBatch(Vec<OutputEvent>),
     KeyPressed {
@@ -101,7 +101,7 @@ pub struct App {
     pub(super) all_font_options: Vec<TerminalFontOption>,
     pub(super) available_shells: Vec<ShellKind>,
     pub(super) config: AppConfig,
-    pub(super) pty_sender: Option<mpsc::Sender<OutputEvent>>,
+    pub(super) pty_sender: Option<mpsc::UnboundedSender<OutputEvent>>,
     pub(super) next_tab_id: u64,
     pub(super) tab_bar_scroll_x: f32,
     pub(super) ignore_scrollable_sync: bool,

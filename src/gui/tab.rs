@@ -19,6 +19,12 @@ pub struct TerminalTab {
     engine: TerminalEngine,
     pending_password: Option<String>,
     password_prompt_buf: Vec<u8>,
+    ssh_state: Option<SshState>,
+}
+
+enum SshState {
+    Connecting,
+    Authenticating,
 }
 
 pub enum TerminalSession {
@@ -34,7 +40,7 @@ impl TerminalTab {
         lines: usize,
         theme: TerminalTheme,
         id: u64,
-        output_tx: mpsc::Sender<OutputEvent>,
+        output_tx: mpsc::UnboundedSender<OutputEvent>,
     ) -> Self {
         Self::launch(shell, columns, lines, theme, id, output_tx)
     }
@@ -45,7 +51,7 @@ impl TerminalTab {
         lines: usize,
         theme: TerminalTheme,
         id: u64,
-        output_tx: mpsc::Sender<OutputEvent>,
+        output_tx: mpsc::UnboundedSender<OutputEvent>,
     ) -> Self {
         let size = TerminalSize::new(columns, lines);
         let launch_spec = shell.launch_spec(size);
@@ -63,11 +69,28 @@ impl TerminalTab {
             ),
         };
 
-        let pending_password = if let ShellKind::Ssh(ref profile) = shell {
-            profile.password.clone()
+        let (pending_password, ssh_state) = if let ShellKind::Ssh(ref profile) = shell {
+            (profile.password.clone(), Some(SshState::Connecting))
         } else {
-            None
+            (None, None)
         };
+
+        let mut engine = TerminalEngine::new(size, 10_000, writer, theme);
+
+        if let ShellKind::Ssh(ref profile) = shell {
+            let dest = if profile.user.is_empty() {
+                profile.host.to_string()
+            } else {
+                format!("{}@{}", profile.user, profile.host)
+            };
+            let port_info = if profile.port != 22 {
+                format!(":{}", profile.port)
+            } else {
+                String::new()
+            };
+            let msg = format!("\x1b[33m⟫ Connecting to {dest}{port_info}...\x1b[0m\r\n");
+            engine.feed_bytes(msg.as_bytes());
+        }
 
         Self {
             id,
@@ -75,13 +98,33 @@ impl TerminalTab {
             shell,
             session,
             selection: None,
-            engine: TerminalEngine::new(size, 10_000, writer, theme),
+            engine,
             pending_password,
             password_prompt_buf: Vec::new(),
+            ssh_state,
         }
     }
 
     pub fn feed_bytes(&mut self, bytes: &[u8]) {
+        // Show "Connected!" on first real output after SSH auth
+        if let Some(ref state) = self.ssh_state {
+            match state {
+                SshState::Connecting if self.pending_password.is_none() => {
+                    // Key-based auth: first output means connected
+                    self.engine
+                        .feed_bytes(b"\x1b[32m\xe2\x9f\xab Connected!\x1b[0m\r\n");
+                    self.ssh_state = None;
+                }
+                SshState::Authenticating => {
+                    // Output after password sent means connected
+                    self.engine
+                        .feed_bytes(b"\x1b[32m\xe2\x9f\xab Connected!\x1b[0m\r\n");
+                    self.ssh_state = None;
+                }
+                _ => {}
+            }
+        }
+
         self.engine.feed_bytes(bytes);
         if let Some(new_title) = self.engine.take_title() {
             self.title = new_title;
@@ -103,6 +146,9 @@ impl TerminalTab {
         if is_password_prompt(&self.password_prompt_buf)
             && let Some(password) = self.pending_password.take()
         {
+            self.engine
+                .feed_bytes(b"\x1b[33m\xe2\x9f\xab Authenticating...\x1b[0m\r\n");
+            self.ssh_state = Some(SshState::Authenticating);
             if let TerminalSession::Active(ref session) = self.session {
                 let mut payload = password.into_bytes();
                 payload.push(b'\n');
