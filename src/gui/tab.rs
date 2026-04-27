@@ -78,18 +78,9 @@ impl TerminalTab {
         let mut engine = TerminalEngine::new(size, 10_000, writer, theme);
 
         if let ShellKind::Ssh(ref profile) = shell {
-            let dest = if profile.user.is_empty() {
-                profile.host.to_string()
-            } else {
-                format!("{}@{}", profile.user, profile.host)
-            };
-            let port_info = if profile.port != 22 {
-                format!(":{}", profile.port)
-            } else {
-                String::new()
-            };
-            let msg = format!("\x1b[33m⟫ Connecting to {dest}{port_info}...\x1b[0m\r\n");
-            engine.feed_bytes(msg.as_bytes());
+            for line in ssh_info_lines(profile) {
+                engine.feed_bytes(line.as_bytes());
+            }
         }
 
         Self {
@@ -110,15 +101,13 @@ impl TerminalTab {
         if let Some(ref state) = self.ssh_state {
             match state {
                 SshState::Connecting if self.pending_password.is_none() => {
-                    // Key-based auth: first output means connected
-                    self.engine
-                        .feed_bytes(b"\x1b[32m\xe2\x9f\xab Connected!\x1b[0m\r\n");
+                    let msg = format!("  {SSH_BADGE}  \x1b[1;32m✓ Connected!\x1b[0m\r\n\r\n");
+                    self.engine.feed_bytes(msg.as_bytes());
                     self.ssh_state = None;
                 }
                 SshState::Authenticating => {
-                    // Output after password sent means connected
-                    self.engine
-                        .feed_bytes(b"\x1b[32m\xe2\x9f\xab Connected!\x1b[0m\r\n");
+                    let msg = format!("  {SSH_BADGE}  \x1b[1;32m✓ Connected!\x1b[0m\r\n\r\n");
+                    self.engine.feed_bytes(msg.as_bytes());
                     self.ssh_state = None;
                 }
                 _ => {}
@@ -146,8 +135,8 @@ impl TerminalTab {
         if is_password_prompt(&self.password_prompt_buf)
             && let Some(password) = self.pending_password.take()
         {
-            self.engine
-                .feed_bytes(b"\x1b[33m\xe2\x9f\xab Authenticating...\x1b[0m\r\n");
+            let auth_msg = format!("  {SSH_BADGE}  \x1b[33mAuthenticating...\x1b[0m\r\n");
+            self.engine.feed_bytes(auth_msg.as_bytes());
             self.ssh_state = Some(SshState::Authenticating);
             if let TerminalSession::Active(ref session) = self.session {
                 let mut payload = password.into_bytes();
@@ -595,6 +584,43 @@ impl Display for SessionError {
             SessionError::Io(err) => write!(f, "{err}"),
         }
     }
+}
+
+/// ANSI badge: white-on-teal " SSH " label.
+const SSH_BADGE: &str = "\x1b[1;97;46m SSH \x1b[0m";
+
+/// Build the informational lines shown when an SSH tab is opened.
+fn ssh_info_lines(profile: &SshProfile) -> Vec<String> {
+    let mut lines = Vec::new();
+
+    // Connection target
+    let dest = if profile.user.is_empty() {
+        profile.host.to_string()
+    } else {
+        format!("{}@{}", profile.user, profile.host)
+    };
+    let port_info = if profile.port != 22 {
+        format!(":{}", profile.port)
+    } else {
+        String::new()
+    };
+    lines.push(format!(
+        "\r\n  {SSH_BADGE}  \x1b[1mConnecting to {dest}{port_info}\x1b[0m\r\n"
+    ));
+
+    // Auth method
+    if let Some(ref identity) = profile.identity_file {
+        lines.push(format!(
+            "         \x1b[36mUsing private key from  \x1b[1;4m{identity}\x1b[0m\r\n"
+        ));
+    } else if profile.password.is_some() {
+        lines.push(
+            "         \x1b[36mUsing saved password\x1b[0m\r\n".to_string(),
+        );
+    }
+
+    lines.push("\r\n".to_string());
+    lines
 }
 
 fn is_password_prompt(buf: &[u8]) -> bool {
