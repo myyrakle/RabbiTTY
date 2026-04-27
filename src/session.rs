@@ -2,7 +2,6 @@ use alacritty_terminal::event::{OnResize, WindowSize};
 use alacritty_terminal::tty::{self, Options, Shell};
 #[cfg(windows)]
 use alacritty_terminal::tty::{ChildEvent, EventedPty, EventedReadWrite};
-use iced::futures::SinkExt;
 use iced::futures::channel::mpsc;
 #[cfg(unix)]
 use std::io::ErrorKind;
@@ -74,7 +73,7 @@ impl Session {
     pub fn spawn(
         spec: LaunchSpec,
         tab_id: u64,
-        mut output_tx: mpsc::Sender<OutputEvent>,
+        mut output_tx: mpsc::UnboundedSender<OutputEvent>,
     ) -> Result<Self, SessionError> {
         tty::setup_env();
 
@@ -159,7 +158,7 @@ impl Session {
     pub fn spawn(
         spec: LaunchSpec,
         tab_id: u64,
-        mut output_tx: mpsc::Sender<OutputEvent>,
+        mut output_tx: mpsc::UnboundedSender<OutputEvent>,
     ) -> Result<Self, SessionError> {
         tty::setup_env();
 
@@ -272,8 +271,11 @@ impl Session {
     }
 }
 
-fn send_output_event(output_tx: &mut mpsc::Sender<OutputEvent>, event: OutputEvent) -> bool {
-    futures::executor::block_on(output_tx.send(event)).is_ok()
+fn send_output_event(
+    output_tx: &mut mpsc::UnboundedSender<OutputEvent>,
+    event: OutputEvent,
+) -> bool {
+    output_tx.unbounded_send(event).is_ok()
 }
 
 #[cfg(unix)]
