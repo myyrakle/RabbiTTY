@@ -15,13 +15,31 @@ pub fn tab_bar<'a>(
 ) -> Element<'a, Message> {
     let palette = Palette::DARK;
 
-    let tabs_data: Vec<_> = tabs.collect();
-    let display_order = compute_display_order(tabs_data.len(), dragging_tab, drag_target);
-
     let mut tab_elements: Vec<Element<Message>> = Vec::new();
+    let is_reordering =
+        dragging_tab.is_some() && drag_target.is_some() && dragging_tab != drag_target;
 
-    for &original_index in &display_order {
-        let (title, index, is_active) = tabs_data[original_index];
+    for (title, index, is_active) in tabs {
+        // Insert drop indicator before the target tab
+        if is_reordering && drag_target == Some(index) {
+            let gap = container(text("")).width(24).height(Length::Shrink).style(
+                move |_theme: &Theme| container::Style {
+                    background: Some(Background::Color(Color {
+                        a: 0.2,
+                        ..palette.accent
+                    })),
+                    border: Border {
+                        radius: 4.0.into(),
+                        width: 0.0,
+                        color: Color::TRANSPARENT,
+                    },
+                    ..Default::default()
+                },
+            );
+
+            tab_elements.push(gap.into());
+        }
+
         let is_dragging = dragging_tab == Some(index);
         let tab_item = browser_tab(title, index, is_active, tab_alpha, is_dragging);
         let tab_item = mouse_area(tab_item)
@@ -286,22 +304,4 @@ fn browser_tab<'a>(
     } else {
         tab_button.into()
     }
-}
-
-fn compute_display_order(
-    len: usize,
-    dragging_tab: Option<usize>,
-    drag_target: Option<usize>,
-) -> Vec<usize> {
-    if let (Some(from), Some(target)) = (dragging_tab, drag_target)
-        && from != target
-        && from < len
-        && target < len
-    {
-        let mut order: Vec<usize> = (0..len).collect();
-        let dragged = order.remove(from);
-        order.insert(target, dragged);
-        return order;
-    }
-    (0..len).collect()
 }

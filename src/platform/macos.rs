@@ -1,6 +1,6 @@
 use crate::config::ThemeConfig;
 use iced::window::raw_window_handle::{RawWindowHandle, WindowHandle};
-use objc2_app_kit::{NSColor, NSView};
+use objc2_app_kit::{NSColor, NSView, NSWindowCollectionBehavior};
 
 // macOS private CoreGraphics SPI for window background blur.
 unsafe extern "C" {
@@ -31,6 +31,14 @@ fn apply_style_inner(handle: WindowHandle<'_>, theme: &ThemeConfig) {
     // on the tab bar's empty space instead.
     window.setMovable(false);
     window.setMovableByWindowBackground(false);
+
+    // Prevent macOS from tiling/fullscreening the window when dragging
+    // near screen edges (macOS Sequoia+).
+    let behavior = window.collectionBehavior();
+    window.setCollectionBehavior(
+        (behavior | NSWindowCollectionBehavior::FullScreenDisallowsTiling)
+            - NSWindowCollectionBehavior::FullScreenAllowsTiling,
+    );
 
     if !theme.blur_enabled {
         return;
