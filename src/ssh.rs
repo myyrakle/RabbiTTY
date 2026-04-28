@@ -8,8 +8,45 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc as tokio_mpsc;
 
-const SSH_BADGE: &str = "\x1b[1;97;46m SSH \x1b[0m";
+// ── ANSI styling helpers ────────────────────────────────────────────
+mod ansi {
+    const RESET: &str = "\x1b[0m";
+    const BOLD: &str = "\x1b[1m";
 
+    pub fn badge(text: &str) -> String {
+        format!("\x1b[1;97;46m {text} {RESET}")
+    }
+
+    pub fn bold(text: &str) -> String {
+        format!("{BOLD}{text}{RESET}")
+    }
+
+    pub fn cyan(text: &str) -> String {
+        format!("\x1b[36m{text}{RESET}")
+    }
+
+    pub fn bold_underline(text: &str) -> String {
+        format!("\x1b[1;4m{text}{RESET}")
+    }
+
+    pub fn yellow(text: &str) -> String {
+        format!("\x1b[33m{text}{RESET}")
+    }
+
+    pub fn green_bold(text: &str) -> String {
+        format!("\x1b[1;32m{text}{RESET}")
+    }
+
+    pub fn red_bold(text: &str) -> String {
+        format!("\x1b[1;31m{text}{RESET}")
+    }
+}
+
+fn ssh_badge() -> String {
+    ansi::badge("SSH")
+}
+
+// ── SSH client handler ──────────────────────────────────────────────
 struct SshHandler {
     fingerprint_tx: Option<tokio::sync::oneshot::Sender<String>>,
 }
@@ -33,7 +70,7 @@ impl client::Handler for SshHandler {
     }
 }
 
-/// Sync Write → async tokio channel bridge
+// ── Sync Write → async tokio channel bridge ─────────────────────────
 struct SshWriter {
     tx: tokio_mpsc::UnboundedSender<Vec<u8>>,
 }
@@ -51,6 +88,7 @@ impl Write for SshWriter {
     }
 }
 
+// ── Public API ──────────────────────────────────────────────────────
 pub struct SshSessionHandle {
     pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub resize_tx: tokio_mpsc::UnboundedSender<(u16, u16)>,
@@ -71,8 +109,11 @@ pub fn spawn_ssh_session(
 
     tokio::spawn(async move {
         let mut otx = output_tx;
-        if let Err(e) = ssh_task(profile, tab_id, rows, cols, write_rx, resize_rx, &mut otx).await {
-            let msg = format!("\r\n  {SSH_BADGE}  \x1b[1;31m{e}\x1b[0m\r\n");
+        if let Err(e) =
+            ssh_task(profile, tab_id, rows, cols, write_rx, resize_rx, &mut otx).await
+        {
+            let badge = ssh_badge();
+            let msg = format!("\r\n  {badge}  {}\r\n", ansi::red_bold(&e.to_string()));
             let _ = otx.unbounded_send(OutputEvent::Data {
                 tab_id,
                 bytes: msg.into_bytes(),
@@ -84,13 +125,19 @@ pub fn spawn_ssh_session(
     SshSessionHandle { writer, resize_tx }
 }
 
-fn send_status(output_tx: &mut futures_mpsc::UnboundedSender<OutputEvent>, tab_id: u64, msg: &str) {
+// ── Status message helper ───────────────────────────────────────────
+fn send_status(
+    output_tx: &mut futures_mpsc::UnboundedSender<OutputEvent>,
+    tab_id: u64,
+    msg: &str,
+) {
     let _ = output_tx.unbounded_send(OutputEvent::Data {
         tab_id,
         bytes: msg.as_bytes().to_vec(),
     });
 }
 
+// ── Main SSH task ───────────────────────────────────────────────────
 async fn ssh_task(
     profile: SshProfile,
     tab_id: u64,
@@ -100,6 +147,8 @@ async fn ssh_task(
     mut resize_rx: tokio_mpsc::UnboundedReceiver<(u16, u16)>,
     output_tx: &mut futures_mpsc::UnboundedSender<OutputEvent>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let badge = ssh_badge();
+
     // --- Status: Connecting ---
     let dest = if profile.user.is_empty() {
         profile.host.to_string()
@@ -114,7 +163,10 @@ async fn ssh_task(
     send_status(
         output_tx,
         tab_id,
-        &format!("\r\n  {SSH_BADGE}  \x1b[1mConnecting to {dest}{port_info}\x1b[0m\r\n"),
+        &format!(
+            "\r\n  {badge}  {}\r\n",
+            ansi::bold(&format!("Connecting to {dest}{port_info}"))
+        ),
     );
 
     // Auth method hint
@@ -122,13 +174,17 @@ async fn ssh_task(
         send_status(
             output_tx,
             tab_id,
-            &format!("         \x1b[36mUsing private key from  \x1b[1;4m{identity}\x1b[0m\r\n"),
+            &format!(
+                "         {}  {}\r\n",
+                ansi::cyan("Using private key from"),
+                ansi::bold_underline(identity)
+            ),
         );
     } else if profile.password.is_some() {
         send_status(
             output_tx,
             tab_id,
-            "         \x1b[36mUsing saved password\x1b[0m\r\n",
+            &format!("         {}\r\n", ansi::cyan("Using saved password")),
         );
     }
 
@@ -151,12 +207,12 @@ async fn ssh_task(
         send_status(
             output_tx,
             tab_id,
-            "         \x1b[36mHost key fingerprint:\x1b[0m\r\n",
+            &format!("         {}\r\n", ansi::cyan("Host key fingerprint:")),
         );
         send_status(
             output_tx,
             tab_id,
-            &format!("         \x1b[1;46;97m {fp} \x1b[0m\r\n"),
+            &format!("         {}\r\n", ansi::badge(&fp)),
         );
     }
 
@@ -164,7 +220,7 @@ async fn ssh_task(
     send_status(
         output_tx,
         tab_id,
-        &format!("  {SSH_BADGE}  \x1b[33mAuthenticating...\x1b[0m\r\n"),
+        &format!("  {badge}  {}\r\n", ansi::yellow("Authenticating...")),
     );
 
     let user = if profile.user.is_empty() {
@@ -190,7 +246,6 @@ async fn ssh_task(
     } else if let Some(ref password) = profile.password {
         session.authenticate_password(&user, password).await?
     } else {
-        // Try default keys
         try_default_keys(&mut session, &user).await
     };
 
@@ -202,13 +257,24 @@ async fn ssh_task(
     send_status(
         output_tx,
         tab_id,
-        &format!("  {SSH_BADGE}  \x1b[1;32m\u{2713} Connected!\x1b[0m\r\n\r\n"),
+        &format!(
+            "  {badge}  {}\r\n\r\n",
+            ansi::green_bold("\u{2713} Connected!")
+        ),
     );
 
     // --- Open channel with PTY + shell ---
     let mut channel = session.channel_open_session().await?;
     channel
-        .request_pty(false, "xterm-256color", cols as u32, rows as u32, 0, 0, &[])
+        .request_pty(
+            false,
+            "xterm-256color",
+            cols as u32,
+            rows as u32,
+            0,
+            0,
+            &[],
+        )
         .await?;
     channel.request_shell(false).await?;
 
