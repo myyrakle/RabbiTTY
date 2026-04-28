@@ -79,10 +79,9 @@ impl Session {
     ) -> Result<Self, SessionError> {
         tty::setup_env();
 
-        // Override process env for keys specified by the launch spec
-        // (e.g. TERM=xterm-256color for SSH). This ensures the forked
-        // child inherits the correct value even if setup_env set something
-        // else. The Options.env also applies, giving a double guarantee.
+        // Override process env for keys specified by the launch spec.
+        // This ensures the forked child inherits the correct value
+        // even if setup_env set something else.
         for (key, value) in &spec.env {
             // SAFETY: no other threads mutate env concurrently on the main thread.
             unsafe { std::env::set_var(key, value) };

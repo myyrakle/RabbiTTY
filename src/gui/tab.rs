@@ -90,14 +90,6 @@ impl TerminalTab {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn status_text(&self) -> String {
-        match &self.session {
-            TerminalSession::Active(_) => "Session: live".into(),
-            TerminalSession::Failed(err) => format!("Session error: {err}"),
-        }
-    }
-
     pub fn render_cells(&self) -> std::sync::Arc<Vec<CellVisual>> {
         self.engine.render_cells()
     }
@@ -108,11 +100,6 @@ impl TerminalTab {
 
     pub fn size(&self) -> TerminalSize {
         self.engine.size()
-    }
-
-    #[allow(dead_code)]
-    pub fn is_alive(&self) -> bool {
-        matches!(&self.session, TerminalSession::Active(_))
     }
 
     pub fn scroll(&mut self, delta: i32) {
