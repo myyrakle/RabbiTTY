@@ -77,9 +77,7 @@ pub fn spawn_ssh_session(
 
     tokio::spawn(async move {
         let mut otx = output_tx;
-        if let Err(e) =
-            ssh_task(profile, tab_id, rows, cols, write_rx, resize_rx, &mut otx).await
-        {
+        if let Err(e) = ssh_task(profile, tab_id, rows, cols, write_rx, resize_rx, &mut otx).await {
             let badge = ssh_badge();
             let msg = format!("\r\n  {badge}  {}\r\n", ansi::red_bold(&e.to_string()));
             let _ = otx.unbounded_send(OutputEvent::Data {
@@ -94,11 +92,7 @@ pub fn spawn_ssh_session(
 }
 
 // ── Status message helper ───────────────────────────────────────────
-fn send_status(
-    output_tx: &mut futures_mpsc::UnboundedSender<OutputEvent>,
-    tab_id: u64,
-    msg: &str,
-) {
+fn send_status(output_tx: &mut futures_mpsc::UnboundedSender<OutputEvent>, tab_id: u64, msg: &str) {
     let _ = output_tx.unbounded_send(OutputEvent::Data {
         tab_id,
         bytes: msg.as_bytes().to_vec(),
@@ -234,15 +228,7 @@ async fn ssh_task(
     // --- Open channel with PTY + shell ---
     let mut channel = session.channel_open_session().await?;
     channel
-        .request_pty(
-            false,
-            "xterm-256color",
-            cols as u32,
-            rows as u32,
-            0,
-            0,
-            &[],
-        )
+        .request_pty(false, "xterm-256color", cols as u32, rows as u32, 0, 0, &[])
         .await?;
     channel.request_shell(false).await?;
 
