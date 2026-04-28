@@ -1,3 +1,4 @@
+pub mod ansi;
 pub mod config;
 pub mod gui;
 pub mod keychain;
