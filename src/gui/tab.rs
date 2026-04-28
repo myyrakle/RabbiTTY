@@ -17,14 +17,6 @@ pub struct TerminalTab {
     pub session: TerminalSession,
     pub selection: Option<Selection>,
     engine: TerminalEngine,
-    pending_password: Option<String>,
-    password_prompt_buf: Vec<u8>,
-    ssh_state: Option<SshState>,
-}
-
-enum SshState {
-    Connecting,
-    Authenticating,
 }
 
 pub enum TerminalSession {
@@ -54,34 +46,32 @@ impl TerminalTab {
         output_tx: mpsc::UnboundedSender<OutputEvent>,
     ) -> Self {
         let size = TerminalSize::new(columns, lines);
-        let launch_spec = shell.launch_spec(size);
-        let title = shell.title_from_program(&launch_spec.program);
-        let (session, writer) = match Session::spawn(launch_spec, id, output_tx) {
-            Ok(session) => {
-                let writer = session.writer();
-                (TerminalSession::Active(session), writer)
-            }
-            Err(err) => (
-                TerminalSession::Failed(err.to_string()),
-                Arc::new(Mutex::new(
-                    Box::new(std::io::sink()) as Box<dyn Write + Send>
-                )),
-            ),
-        };
 
-        let (pending_password, ssh_state) = if let ShellKind::Ssh(ref profile) = shell {
-            (profile.password.clone(), Some(SshState::Connecting))
+        let title = shell.display_name();
+
+        let (session, writer) = if let ShellKind::Ssh(ref profile) = shell {
+            let s =
+                Session::spawn_ssh(profile.clone(), id, lines as u16, columns as u16, output_tx);
+
+            let w = s.writer();
+            (TerminalSession::Active(s), w)
         } else {
-            (None, None)
+            let spec = shell.launch_spec(size);
+            match Session::spawn(spec, id, output_tx) {
+                Ok(s) => {
+                    let w = s.writer();
+                    (TerminalSession::Active(s), w)
+                }
+                Err(err) => {
+                    let sink = Arc::new(Mutex::new(
+                        Box::new(std::io::sink()) as Box<dyn Write + Send>
+                    ));
+                    (TerminalSession::Failed(err.to_string()), sink)
+                }
+            }
         };
 
-        let mut engine = TerminalEngine::new(size, 10_000, writer, theme);
-
-        if let ShellKind::Ssh(ref profile) = shell {
-            for line in ssh_info_lines(profile) {
-                engine.feed_bytes(line.as_bytes());
-            }
-        }
+        let engine = TerminalEngine::new(size, 10_000, writer, theme);
 
         Self {
             id,
@@ -90,60 +80,13 @@ impl TerminalTab {
             session,
             selection: None,
             engine,
-            pending_password,
-            password_prompt_buf: Vec::new(),
-            ssh_state,
         }
     }
 
     pub fn feed_bytes(&mut self, bytes: &[u8]) {
-        // Show "Connected!" on first real output after SSH auth
-        if let Some(ref state) = self.ssh_state {
-            match state {
-                SshState::Connecting if self.pending_password.is_none() => {
-                    let msg = format!("  {SSH_BADGE}  \x1b[1;32m✓ Connected!\x1b[0m\r\n\r\n");
-                    self.engine.feed_bytes(msg.as_bytes());
-                    self.ssh_state = None;
-                }
-                SshState::Authenticating => {
-                    let msg = format!("  {SSH_BADGE}  \x1b[1;32m✓ Connected!\x1b[0m\r\n\r\n");
-                    self.engine.feed_bytes(msg.as_bytes());
-                    self.ssh_state = None;
-                }
-                _ => {}
-            }
-        }
-
         self.engine.feed_bytes(bytes);
         if let Some(new_title) = self.engine.take_title() {
             self.title = new_title;
-        }
-        if self.pending_password.is_some() {
-            self.check_password_prompt(bytes);
-        }
-    }
-
-    fn check_password_prompt(&mut self, bytes: &[u8]) {
-        // Buffer recent output to detect password prompts across chunk boundaries.
-        // Keep only the last 256 bytes to avoid unbounded growth.
-        self.password_prompt_buf.extend_from_slice(bytes);
-        if self.password_prompt_buf.len() > 256 {
-            let start = self.password_prompt_buf.len() - 256;
-            self.password_prompt_buf.drain(..start);
-        }
-
-        if is_password_prompt(&self.password_prompt_buf)
-            && let Some(password) = self.pending_password.take()
-        {
-            let auth_msg = format!("  {SSH_BADGE}  \x1b[33mAuthenticating...\x1b[0m\r\n");
-            self.engine.feed_bytes(auth_msg.as_bytes());
-            self.ssh_state = Some(SshState::Authenticating);
-            if let TerminalSession::Active(ref session) = self.session {
-                let mut payload = password.into_bytes();
-                payload.push(b'\n');
-                let _ = session.send_bytes(&payload);
-            }
-            self.password_prompt_buf.clear();
         }
     }
 
@@ -361,7 +304,7 @@ pub enum ShellKind {
 impl ShellKind {
     fn launch_spec(&self, size: TerminalSize) -> LaunchSpec {
         let (program, args) = match self {
-            ShellKind::Ssh(profile) => return profile.launch_spec(size),
+            ShellKind::Ssh(_) => unreachable!("SSH uses native russh, not launch_spec"),
             ShellKind::Default => resolve_default_shell(),
             ShellKind::Shell { path, .. } => (path.clone(), vec!["-l".to_string()]),
         };
@@ -377,19 +320,6 @@ impl ShellKind {
         }
     }
 
-    fn title_from_program(&self, program: &str) -> String {
-        if let ShellKind::Ssh(profile) = self {
-            return profile.tab_title();
-        }
-
-        Path::new(program)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .filter(|name| !name.trim().is_empty())
-            .unwrap_or("shell")
-            .to_string()
-    }
-
     pub fn display_name(&self) -> String {
         match self {
             ShellKind::Default => default_shell_display_name(),
@@ -400,42 +330,6 @@ impl ShellKind {
 }
 
 impl SshProfile {
-    fn launch_spec(&self, size: TerminalSize) -> LaunchSpec {
-        let mut args = Vec::new();
-
-        if self.port != 22 {
-            args.push("-p".to_string());
-            args.push(self.port.to_string());
-        }
-
-        if let Some(ref identity) = self.identity_file {
-            let expanded = if identity.starts_with("~/") {
-                dirs::home_dir()
-                    .map(|h| h.join(&identity[2..]).to_string_lossy().to_string())
-                    .unwrap_or_else(|| identity.clone())
-            } else {
-                identity.clone()
-            };
-            args.push("-i".to_string());
-            args.push(expanded);
-        }
-
-        let destination = if self.user.is_empty() {
-            self.host.clone()
-        } else {
-            format!("{}@{}", self.user, self.host)
-        };
-        args.push(destination);
-
-        LaunchSpec {
-            program: "ssh".to_string(),
-            args,
-            env: vec![("TERM".to_string(), "xterm-256color".to_string())],
-            rows: size.lines as u16,
-            cols: size.columns as u16,
-        }
-    }
-
     fn tab_title(&self) -> String {
         if self.name.is_empty() {
             if self.user.is_empty() {
@@ -586,86 +480,9 @@ impl Display for SessionError {
     }
 }
 
-/// ANSI badge: white-on-teal " SSH " label.
-const SSH_BADGE: &str = "\x1b[1;97;46m SSH \x1b[0m";
-
-/// Build the informational lines shown when an SSH tab is opened.
-fn ssh_info_lines(profile: &SshProfile) -> Vec<String> {
-    let mut lines = Vec::new();
-
-    // Connection target
-    let dest = if profile.user.is_empty() {
-        profile.host.to_string()
-    } else {
-        format!("{}@{}", profile.user, profile.host)
-    };
-    let port_info = if profile.port != 22 {
-        format!(":{}", profile.port)
-    } else {
-        String::new()
-    };
-    lines.push(format!(
-        "\r\n  {SSH_BADGE}  \x1b[1mConnecting to {dest}{port_info}\x1b[0m\r\n"
-    ));
-
-    // Auth method
-    if let Some(ref identity) = profile.identity_file {
-        lines.push(format!(
-            "         \x1b[36mUsing private key from  \x1b[1;4m{identity}\x1b[0m\r\n"
-        ));
-    } else if profile.password.is_some() {
-        lines.push("         \x1b[36mUsing saved password\x1b[0m\r\n".to_string());
-    }
-
-    lines.push("\r\n".to_string());
-    lines
-}
-
-fn is_password_prompt(buf: &[u8]) -> bool {
-    let haystack = String::from_utf8_lossy(buf).to_ascii_lowercase();
-    haystack.contains("password:")
-        || haystack.contains("password for")
-        || haystack.contains("'s password:")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn detects_standard_password_prompts() {
-        assert!(is_password_prompt(b"Password:"));
-        assert!(is_password_prompt(b"password: "));
-        assert!(is_password_prompt(b"admin@host's password:"));
-        assert!(is_password_prompt(b"Password for admin:"));
-        assert!(is_password_prompt(b"PASSWORD:"));
-    }
-
-    #[test]
-    fn rejects_non_password_output() {
-        assert!(!is_password_prompt(b"Last login: Mon Jan 1"));
-        assert!(!is_password_prompt(b"$ echo hello"));
-        assert!(!is_password_prompt(b""));
-        assert!(!is_password_prompt(b"Welcome to Ubuntu"));
-    }
-
-    #[test]
-    fn ssh_profile_launch_spec_includes_port_and_user() {
-        let profile = SshProfile {
-            name: "test".into(),
-            host: "example.com".into(),
-            port: 2222,
-            user: "admin".into(),
-            identity_file: None,
-            password: Some("secret".into()),
-        };
-        let size = TerminalSize::new(80, 24);
-        let spec = profile.launch_spec(size);
-        assert_eq!(spec.program, "ssh");
-        assert!(spec.args.contains(&"-p".to_string()));
-        assert!(spec.args.contains(&"2222".to_string()));
-        assert!(spec.args.contains(&"admin@example.com".to_string()));
-    }
 
     #[test]
     fn ssh_profile_tab_title() {

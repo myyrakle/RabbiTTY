@@ -26,10 +26,12 @@ pub struct Session {
     #[cfg(unix)]
     pty: Option<tty::Pty>,
     #[cfg(windows)]
-    pty: Arc<Mutex<tty::Pty>>,
+    pty: Option<Arc<Mutex<tty::Pty>>>,
     #[cfg(windows)]
-    shutdown: Arc<AtomicBool>,
+    shutdown: Option<Arc<AtomicBool>>,
     reader: Option<JoinHandle<()>>,
+    /// For native SSH sessions: send resize events to the async task.
+    resize_tx: Option<tokio::sync::mpsc::UnboundedSender<(u16, u16)>>,
 }
 
 #[derive(Debug, Clone)]
@@ -151,6 +153,7 @@ impl Session {
             writer,
             pty: Some(pty),
             reader: Some(reader_handle),
+            resize_tx: None,
         })
     }
 
@@ -218,10 +221,32 @@ impl Session {
 
         Ok(Self {
             writer,
-            pty,
-            shutdown,
+            pty: Some(pty),
+            shutdown: Some(shutdown),
             reader: Some(reader_handle),
+            resize_tx: None,
         })
+    }
+
+    pub fn spawn_ssh(
+        profile: crate::config::SshProfile,
+        tab_id: u64,
+        rows: u16,
+        cols: u16,
+        output_tx: mpsc::UnboundedSender<OutputEvent>,
+    ) -> Self {
+        let handle = crate::ssh::spawn_ssh_session(profile, tab_id, rows, cols, output_tx);
+        Self {
+            writer: handle.writer,
+            #[cfg(unix)]
+            pty: None,
+            #[cfg(windows)]
+            pty: None,
+            #[cfg(windows)]
+            shutdown: None,
+            reader: None,
+            resize_tx: Some(handle.resize_tx),
+        }
     }
 
     pub fn send_bytes(&self, bytes: &[u8]) -> Result<(), SessionError> {
@@ -240,6 +265,10 @@ impl Session {
 
     #[cfg(unix)]
     pub fn resize(&mut self, rows: u16, cols: u16) -> Result<(), SessionError> {
+        if let Some(ref tx) = self.resize_tx {
+            let _ = tx.send((rows, cols));
+            return Ok(());
+        }
         if let Some(ref mut pty) = self.pty {
             let window_size = WindowSize {
                 num_lines: rows,
@@ -256,14 +285,21 @@ impl Session {
 
     #[cfg(windows)]
     pub fn resize(&mut self, rows: u16, cols: u16) -> Result<(), SessionError> {
+        if let Some(ref tx) = self.resize_tx {
+            let _ = tx.send((rows, cols));
+            return Ok(());
+        }
+        let pty = self
+            .pty
+            .as_ref()
+            .ok_or_else(|| SessionError::Io("no pty".into()))?;
         let window_size = WindowSize {
             num_lines: rows,
             num_cols: cols,
             cell_width: 1,
             cell_height: 1,
         };
-        let mut guard = self
-            .pty
+        let mut guard = pty
             .lock()
             .map_err(|err| SessionError::Io(format!("pty lock failed: {err}")))?;
         guard.on_resize(window_size);
@@ -295,7 +331,9 @@ impl Drop for Session {
 #[cfg(windows)]
 impl Drop for Session {
     fn drop(&mut self) {
-        self.shutdown.store(true, Ordering::Release);
+        if let Some(ref shutdown) = self.shutdown {
+            shutdown.store(true, Ordering::Release);
+        }
         if let Some(handle) = self.reader.take() {
             let _ = handle.join();
         }
