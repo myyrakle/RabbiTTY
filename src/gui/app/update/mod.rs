@@ -3,7 +3,7 @@ mod tab;
 mod terminal;
 
 use super::{App, Message, SETTINGS_TAB_INDEX};
-use crate::gui::settings::{SettingsDraft, SettingsField};
+use crate::gui::settings::{SettingsCategory, SettingsDraft, SettingsField};
 use crate::gui::tab::ShellKind;
 use iced::keyboard::{Key, key::Named};
 use iced::time::Instant;
@@ -116,6 +116,10 @@ impl App {
                     self.settings_open = true;
                     self.active_tab = SETTINGS_TAB_INDEX;
                     self.settings_draft = SettingsDraft::from_config(&self.config);
+                }
+                if matches!(category, SettingsCategory::Ssh) {
+                    self.settings_draft
+                        .load_ssh_passwords_from_keychain(&self.config.ssh_profiles);
                 }
             }
             Message::SettingsInputChanged(field, value) => {
@@ -336,6 +340,24 @@ impl App {
                 _ => {}
             }
             return Task::none();
+        }
+
+        // Cmd+1..9 (macOS) / Ctrl+1..9 (other) — switch to Nth tab
+        if let Key::Character(ref c) = key
+            && let Some(digit) = c.chars().next().and_then(|ch| ch.to_digit(10))
+        {
+            #[cfg(target_os = "macos")]
+            let modifier_held = modifiers.logo();
+            #[cfg(not(target_os = "macos"))]
+            let modifier_held = modifiers.control();
+
+            if modifier_held && (1..=9).contains(&digit) {
+                let target = (digit as usize) - 1;
+                if target < self.tabs.len() {
+                    self.active_tab = target;
+                }
+                return Task::none();
+            }
         }
 
         if let Some(task) = self.handle_app_shortcut(&key, modifiers) {

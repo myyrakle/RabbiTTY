@@ -101,7 +101,7 @@ fn send_status(output_tx: &mut futures_mpsc::UnboundedSender<OutputEvent>, tab_i
 
 // ── Main SSH task ───────────────────────────────────────────────────
 async fn ssh_task(
-    profile: SshProfile,
+    mut profile: SshProfile,
     tab_id: u64,
     rows: u16,
     cols: u16,
@@ -130,6 +130,11 @@ async fn ssh_task(
             ansi::bold(&format!("Connecting to {dest}{port_info}"))
         ),
     );
+
+    // Load password from OS keychain on demand (not at app startup)
+    if profile.password.is_none() && profile.identity_file.is_none() {
+        profile.password = crate::keychain::get_password(&profile.host, &profile.user);
+    }
 
     // Auth method hint
     if let Some(ref identity) = profile.identity_file {
