@@ -202,6 +202,18 @@ impl SettingsDraft {
         }
     }
 
+    /// Load passwords from OS keychain into SSH profile drafts.
+    /// Call this only when the user opens SSH settings, not at app startup.
+    pub fn load_ssh_passwords_from_keychain(&mut self, profiles: &[SshProfile]) {
+        for (draft, profile) in self.ssh_profiles.iter_mut().zip(profiles.iter()) {
+            if draft.password.is_empty()
+                && let Some(pw) = crate::keychain::get_password(&profile.host, &profile.user)
+            {
+                draft.password = pw;
+            }
+        }
+    }
+
     pub fn update_ssh_profile(&mut self, index: usize, field: SshProfileField, value: String) {
         if let Some(draft) = self.ssh_profiles.get_mut(index) {
             match field {

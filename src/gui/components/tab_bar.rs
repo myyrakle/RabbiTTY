@@ -194,6 +194,10 @@ fn browser_tab<'a>(
     } else {
         title.into()
     };
+    let index_label = text(format!("{}", index + 1)).size(10).color(Color {
+        a: 0.35,
+        ..palette.text_secondary
+    });
     let tab_text = text(display_title).size(12);
 
     let close_btn = button(text("✕").size(9))
@@ -225,7 +229,7 @@ fn browser_tab<'a>(
             },
         );
 
-    let tab_content = row![tab_text, close_btn]
+    let tab_content = row![index_label, tab_text, close_btn]
         .spacing(6)
         .align_y(iced::Alignment::Center);
 

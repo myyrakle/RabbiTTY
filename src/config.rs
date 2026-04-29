@@ -277,10 +277,6 @@ impl AppConfig {
                 config.apply_file(file);
             }
         }
-        // Load passwords from OS keychain
-        for profile in &mut config.ssh_profiles {
-            profile.password = crate::keychain::get_password(&profile.host, &profile.user);
-        }
         config
     }
 
