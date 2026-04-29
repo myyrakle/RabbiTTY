@@ -40,8 +40,7 @@ pub fn tab_bar<'a>(
             tab_elements.push(gap.into());
         }
 
-        let is_dragging = dragging_tab == Some(index);
-        let tab_item = browser_tab(title, index, is_active, tab_alpha, is_dragging);
+        let tab_item = browser_tab(title, index, is_active, tab_alpha);
         let tab_item = mouse_area(tab_item)
             .on_press(Message::TabSelected(index))
             .on_enter(Message::TabDragHover(index))
@@ -185,7 +184,6 @@ fn browser_tab<'a>(
     index: usize,
     is_active: bool,
     tab_alpha: f32,
-    is_dragging: bool,
 ) -> Element<'a, Message> {
     let palette = Palette::DARK;
 
@@ -234,25 +232,7 @@ fn browser_tab<'a>(
     let inactive_alpha = tab_alpha.clamp(0.0, 1.0);
     let tab_button = button(tab_content).padding([6, 12]).style(
         move |_theme: &Theme, status: button::Status| {
-            if is_dragging {
-                button::Style {
-                    background: Some(Background::Color(Color {
-                        a: 0.15,
-                        ..palette.accent
-                    })),
-                    text_color: palette.text,
-                    border: Border {
-                        radius: 4.0.into(),
-                        width: 1.0,
-                        color: Color {
-                            a: 0.5,
-                            ..palette.accent
-                        },
-                    },
-                    shadow: iced::Shadow::default(),
-                    snap: false,
-                }
-            } else if is_active {
+            if is_active {
                 button::Style {
                     background: Some(Background::Color(Color {
                         a: inactive_alpha,

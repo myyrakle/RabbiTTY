@@ -20,7 +20,7 @@ impl Palette {
         surface: color!(0x31, 0x32, 0x44),    // Surface0
         text: color!(0xcd, 0xd6, 0xf4),       // Text
         text_secondary: color!(0xa6, 0xad, 0xc8), // Subtext0
-        accent: color!(0x89, 0xb4, 0xfa),     // Blue
+        accent: color!(0x4d, 0x9e, 0xf7),     // Bluebird
         success: color!(0xa6, 0xe3, 0xa1),    // Green
         error: color!(0xf3, 0x8b, 0xa8),      // Red
     };
