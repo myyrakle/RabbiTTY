@@ -1,8 +1,10 @@
+mod ansi;
 mod config;
 mod gui;
 mod keychain;
 mod platform;
 mod session;
+mod ssh;
 mod terminal;
 
 use iced::Size;
