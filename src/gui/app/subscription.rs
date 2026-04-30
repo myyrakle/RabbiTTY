@@ -1,4 +1,5 @@
 use super::{App, Message};
+use iced::advanced::input_method;
 use iced::futures::StreamExt;
 use iced::futures::channel::mpsc;
 use iced::futures::sink::SinkExt;
@@ -56,6 +57,12 @@ impl App {
                     modifiers,
                     text: text.map(|s| s.to_string()),
                 }),
+                Event::InputMethod(input_method::Event::Commit(text)) => {
+                    Some(Message::ImeCommit(text))
+                }
+                Event::InputMethod(input_method::Event::Preedit(text, cursor)) => {
+                    Some(Message::ImePreedit(text, cursor))
+                }
                 Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                     Some(Message::TabDragRelease)
                 }

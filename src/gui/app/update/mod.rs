@@ -218,6 +218,26 @@ impl App {
                     let _ = session.send_bytes(text.as_bytes());
                 }
             }
+            Message::ImeCommit(text) => {
+                if !text.is_empty()
+                    && self.active_tab != SETTINGS_TAB_INDEX
+                    && let Some(tab) = self.tabs.get_mut(self.active_tab)
+                    && let crate::gui::tab::TerminalSession::Active(session) = &tab.session
+                {
+                    let _ = session.send_bytes(text.as_bytes());
+                    tab.clear_selection();
+                }
+                self.ime_preedit = None;
+                self.ignore_scrollable_sync = true;
+                return self.sync_terminal_scrollable();
+            }
+            Message::ImePreedit(text, cursor) => {
+                if text.is_empty() {
+                    self.ime_preedit = None;
+                } else {
+                    self.ime_preedit = Some((text, cursor));
+                }
+            }
             Message::TerminalScroll(rel_y) => {
                 if self.ignore_scrollable_sync {
                     self.ignore_scrollable_sync = false;
