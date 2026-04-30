@@ -36,13 +36,16 @@ impl App {
         if history == 0 {
             return Task::none();
         }
+        let dims = tab.size();
+        let cell_height = self.config.terminal.cell_height.max(1.0);
+        // Match the view's content height: (history + lines) * cell_height
+        let total_content = (history + dims.lines) as f32 * cell_height;
         let rel_y = 1.0 - (offset as f32 / history as f32).clamp(0.0, 1.0);
-        let content_height = history as f32 * self.config.terminal.cell_height.max(1.0);
         scroll_to(
             TERMINAL_SCROLLABLE_ID.clone(),
             scrollable::AbsoluteOffset {
                 x: 0.0,
-                y: rel_y * content_height,
+                y: rel_y * total_content,
             },
         )
     }
@@ -61,12 +64,13 @@ impl App {
         if offset > 0 {
             return Task::none();
         }
-        let content_height = history as f32 * self.config.terminal.cell_height.max(1.0);
+        // Use f32::MAX so iced clamps to the actual bottom, avoiding
+        // mismatches between the calculated offset and the view's content height.
         scroll_to(
             TERMINAL_SCROLLABLE_ID.clone(),
             scrollable::AbsoluteOffset {
                 x: 0.0,
-                y: content_height,
+                y: f32::MAX,
             },
         )
     }
