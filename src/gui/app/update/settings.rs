@@ -35,6 +35,7 @@ impl App {
 
     pub(super) fn apply_updates_to_runtime(&mut self, updates: AppConfigUpdates) -> Task<Message> {
         self.config.apply_updates(updates);
+        self.palette = crate::gui::theme::Palette::from_theme(&self.config.theme);
         self.settings_draft = SettingsDraft::from_config(&self.config);
 
         let new_size = Size::new(self.config.ui.window_width, self.config.ui.window_height);

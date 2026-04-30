@@ -1,26 +1,25 @@
 use crate::gui::app::Message;
+use crate::gui::components::{button_primary, button_secondary};
 use crate::gui::settings::{SettingsDraft, SshProfileDraft, SshProfileField};
 use crate::gui::theme::{Palette, RADIUS_SMALL, SPACING_NORMAL, SPACING_SMALL};
 use iced::widget::{column, container, row, text, text_input};
 use iced::{Alignment, Background, Border, Color, Element, Length};
 
-use crate::gui::components::{button_primary, button_secondary};
-
-pub fn view(draft: &SettingsDraft) -> Element<'_, Message> {
+pub fn view(draft: &SettingsDraft, palette: Palette) -> Element<'_, Message> {
     let mut items: Vec<Element<Message>> = Vec::new();
 
     for (i, profile) in draft.ssh_profiles.iter().enumerate() {
-        items.push(profile_card(i, profile));
+        items.push(profile_card(i, profile, palette));
     }
 
     if draft.ssh_profiles.is_empty() {
-        items.push(empty_state());
+        items.push(empty_state(palette));
     }
 
     items.push(
         row![
-            button_primary("+ Add Profile").on_press(Message::AddSshProfile),
-            button_primary("Save All").on_press(Message::SaveSshProfiles),
+            button_primary("+ Add Profile", palette).on_press(Message::AddSshProfile),
+            button_primary("Save All", palette).on_press(Message::SaveSshProfiles),
         ]
         .spacing(SPACING_SMALL)
         .into(),
@@ -32,11 +31,10 @@ pub fn view(draft: &SettingsDraft) -> Element<'_, Message> {
         .into()
 }
 
-fn empty_state<'a>() -> Element<'a, Message> {
-    let palette = Palette::DARK;
+fn empty_state(palette: Palette) -> Element<'static, Message> {
     container(
         column![
-            text("⇄").size(28).color(Color {
+            text("\u{21c4}").size(28).color(Color {
                 a: 0.3,
                 ..palette.text
             }),
@@ -56,9 +54,11 @@ fn empty_state<'a>() -> Element<'a, Message> {
     .into()
 }
 
-fn profile_card<'a>(index: usize, profile: &'a SshProfileDraft) -> Element<'a, Message> {
-    let palette = Palette::DARK;
-
+fn profile_card<'a>(
+    index: usize,
+    profile: &'a SshProfileDraft,
+    palette: Palette,
+) -> Element<'a, Message> {
     // Dynamic title: show preview of connection
     let title = if !profile.name.is_empty() {
         profile.name.clone()
@@ -73,7 +73,7 @@ fn profile_card<'a>(index: usize, profile: &'a SshProfileDraft) -> Element<'a, M
     let title_row = row![
         text(title).size(14).color(palette.accent),
         container("").width(Length::Fill),
-        button_secondary("Remove").on_press(Message::RemoveSshProfile(index)),
+        button_secondary("Remove", palette).on_press(Message::RemoveSshProfile(index)),
     ]
     .align_y(Alignment::Center)
     .width(Length::Fill);
@@ -91,22 +91,37 @@ fn profile_card<'a>(index: usize, profile: &'a SshProfileDraft) -> Element<'a, M
 
     // Connection section: host:port on one row, user below
     let host_port_row = row![
-        styled_input("Host", &profile.host, index, SshProfileField::Host).width(Length::Fill),
+        styled_input("Host", &profile.host, index, SshProfileField::Host, palette)
+            .width(Length::Fill),
         text(":").size(13).color(palette.text_secondary),
-        styled_input_small("Port", &profile.port, index, SshProfileField::Port, 60.0),
+        styled_input_small(
+            "Port",
+            &profile.port,
+            index,
+            SshProfileField::Port,
+            60.0,
+            palette
+        ),
     ]
     .spacing(4)
     .align_y(Alignment::Center)
     .width(Length::Fill);
 
-    let user_row =
-        styled_input("Username", &profile.user, index, SshProfileField::User).width(Length::Fill);
+    let user_row = styled_input(
+        "Username",
+        &profile.user,
+        index,
+        SshProfileField::User,
+        palette,
+    )
+    .width(Length::Fill);
 
     let name_row = styled_input(
         "Display Name (optional)",
         &profile.name,
         index,
         SshProfileField::Name,
+        palette,
     )
     .width(Length::Fill);
 
@@ -120,10 +135,11 @@ fn profile_card<'a>(index: usize, profile: &'a SshProfileDraft) -> Element<'a, M
         &profile.identity_file,
         index,
         SshProfileField::IdentityFile,
+        palette,
     )
     .width(Length::Fill);
 
-    let password_row = styled_password("Password", &profile.password, index);
+    let password_row = styled_password("Password", &profile.password, index, palette);
 
     let auth_hint = text("Password is stored securely in your OS keychain")
         .size(10)
@@ -172,8 +188,8 @@ fn styled_input<'a>(
     value: &'a str,
     index: usize,
     field: SshProfileField,
+    palette: Palette,
 ) -> text_input::TextInput<'a, Message> {
-    let palette = Palette::DARK;
     text_input(placeholder, value)
         .on_input(move |next| Message::SshProfileFieldChanged(index, field, next))
         .padding([6, 10])
@@ -187,8 +203,8 @@ fn styled_input_small<'a>(
     index: usize,
     field: SshProfileField,
     width: f32,
+    palette: Palette,
 ) -> text_input::TextInput<'a, Message> {
-    let palette = Palette::DARK;
     text_input(placeholder, value)
         .on_input(move |next| Message::SshProfileFieldChanged(index, field, next))
         .padding([6, 10])
@@ -201,8 +217,8 @@ fn styled_password<'a>(
     placeholder: &'a str,
     value: &'a str,
     index: usize,
+    palette: Palette,
 ) -> text_input::TextInput<'a, Message> {
-    let palette = Palette::DARK;
     text_input(placeholder, value)
         .secure(true)
         .on_input(move |next| {

@@ -12,7 +12,7 @@ impl App {
         &'a self,
         base_layout: impl Into<Element<'a, Message>>,
     ) -> Element<'a, Message> {
-        let palette = Palette::DARK;
+        let palette = self.palette;
         let now = Instant::now();
 
         let progress: f32 = self.shell_picker_anim.interpolate(0.0f32, 1.0f32, now);
@@ -48,10 +48,10 @@ impl App {
                 })
                 .into(),
         );
-        items.push(divider_with_alpha(progress));
+        items.push(divider_with_alpha(progress, palette));
 
         // Shell section
-        items.push(section_label("Shells", progress));
+        items.push(section_label("Shells", progress, palette));
 
         for shell in &self.available_shells {
             let label = shell.display_name();
@@ -67,14 +67,15 @@ impl App {
                 selected,
                 Message::CreateTab(shell.clone()),
                 progress,
+                palette,
             ));
             option_index += 1;
         }
 
         // SSH section
         if !self.config.ssh_profiles.is_empty() {
-            items.push(divider_with_alpha(progress));
-            items.push(section_label("SSH", progress));
+            items.push(divider_with_alpha(progress, palette));
+            items.push(section_label("SSH", progress, palette));
 
             for (i, profile) in self.config.ssh_profiles.iter().enumerate() {
                 let label = if profile.name.is_empty() {
@@ -97,6 +98,7 @@ impl App {
                     selected,
                     Message::CreateSshTab(i),
                     progress,
+                    palette,
                 ));
                 option_index += 1;
             }
@@ -146,8 +148,7 @@ impl App {
     }
 }
 
-fn section_label(label: &str, alpha: f32) -> Element<'_, Message> {
-    let palette = Palette::DARK;
+fn section_label(label: &str, alpha: f32, palette: Palette) -> Element<'_, Message> {
     text(label)
         .size(11)
         .color(Color {
@@ -157,8 +158,7 @@ fn section_label(label: &str, alpha: f32) -> Element<'_, Message> {
         .into()
 }
 
-fn divider_with_alpha(alpha: f32) -> Element<'static, Message> {
-    let palette = Palette::DARK;
+fn divider_with_alpha(alpha: f32, palette: Palette) -> Element<'static, Message> {
     container(text(""))
         .width(Length::Fill)
         .height(1)
@@ -178,9 +178,8 @@ fn picker_item(
     selected: bool,
     on_press: Message,
     alpha: f32,
+    palette: Palette,
 ) -> Element<'static, Message> {
-    let palette = Palette::DARK;
-
     let mut content_items: Vec<Element<'static, Message>> = vec![
         text(label)
             .size(13)

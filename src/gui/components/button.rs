@@ -4,11 +4,10 @@ use iced::{Background, Border, Color, Shadow, Theme};
 
 const RADIUS: f32 = 6.0;
 
-pub fn primary(text: &str) -> button::Button<'_, crate::gui::app::Message> {
+pub fn primary(text: &str, palette: Palette) -> button::Button<'_, crate::gui::app::Message> {
     button(iced::widget::text(text).size(13))
         .padding([7, 16])
-        .style(|_theme: &Theme, status: button::Status| {
-            let palette = Palette::DARK;
+        .style(move |_theme: &Theme, status: button::Status| {
             let bg = match status {
                 button::Status::Hovered => Color {
                     r: palette.accent.r * 1.1,
@@ -41,11 +40,10 @@ pub fn primary(text: &str) -> button::Button<'_, crate::gui::app::Message> {
         })
 }
 
-pub fn secondary(text: &str) -> button::Button<'_, crate::gui::app::Message> {
+pub fn secondary(text: &str, palette: Palette) -> button::Button<'_, crate::gui::app::Message> {
     button(iced::widget::text(text).size(13))
         .padding([7, 16])
-        .style(|_theme: &Theme, status: button::Status| {
-            let palette = Palette::DARK;
+        .style(move |_theme: &Theme, status: button::Status| {
             let (bg, border_alpha) = match status {
                 button::Status::Hovered => (
                     Color {

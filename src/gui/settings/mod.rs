@@ -324,6 +324,7 @@ pub fn view_category<'a>(
     font_combo_state: &'a iced::widget::combo_box::State<TerminalFontOption>,
     show_all_fonts: bool,
     all_font_options: &'a [TerminalFontOption],
+    palette: Palette,
 ) -> Element<'a, Message> {
     match category {
         SettingsCategory::Ui => ui::view(config, draft),
@@ -339,9 +340,9 @@ pub fn view_category<'a>(
                 selected_font,
             )
         }
-        SettingsCategory::Theme => theme::view(config, draft),
+        SettingsCategory::Theme => theme::view(config, draft, palette),
         SettingsCategory::Shortcuts => shortcuts::view(config, draft),
-        SettingsCategory::Ssh => ssh::view(draft),
+        SettingsCategory::Ssh => ssh::view(draft, palette),
     }
 }
 

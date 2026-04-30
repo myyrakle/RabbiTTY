@@ -1,13 +1,13 @@
 use super::super::{App, Message};
 use crate::gui::components::{button_primary, button_secondary};
 use crate::gui::settings::{self, SettingsCategory};
-use crate::gui::theme::{Palette, RADIUS_NORMAL, SPACING_LARGE, SPACING_NORMAL, SPACING_SMALL};
+use crate::gui::theme::{RADIUS_NORMAL, SPACING_LARGE, SPACING_NORMAL, SPACING_SMALL};
 use iced::widget::{button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length};
 
 impl App {
     pub(in crate::gui) fn view_settings(&self) -> Element<'_, Message> {
-        let palette = Palette::DARK;
+        let palette = self.palette;
         let mut category_items: Vec<Element<Message>> = Vec::new();
 
         for category in SettingsCategory::ALL {
@@ -89,8 +89,8 @@ impl App {
             breadcrumb,
             container("").width(Length::Fill),
             row![
-                button_secondary("Apply").on_press(Message::ApplySettings),
-                button_primary("Save").on_press(Message::SaveSettings),
+                button_secondary("Apply", palette).on_press(Message::ApplySettings),
+                button_primary("Save", palette).on_press(Message::SaveSettings),
             ]
             .spacing(SPACING_SMALL)
         ]
@@ -105,6 +105,7 @@ impl App {
             &self.font_combo_state,
             self.show_all_fonts,
             &self.all_font_options,
+            palette,
         ))
         .padding([0, 12])
         .width(Length::Fill);

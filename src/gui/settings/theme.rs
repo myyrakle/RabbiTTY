@@ -10,9 +10,11 @@ use iced::{Background, Border, Color, Element, Length};
 
 const LABEL_WIDTH: f32 = 160.0;
 
-pub fn view<'a>(_config: &'a AppConfig, draft: &'a SettingsDraft) -> Element<'a, Message> {
-    let palette = Palette::DARK;
-
+pub fn view<'a>(
+    _config: &'a AppConfig,
+    draft: &'a SettingsDraft,
+    palette: Palette,
+) -> Element<'a, Message> {
     // -- Preset picker: 2-column grid of visual cards --
     let grid_rows = build_preset_grid(draft, &palette);
 
