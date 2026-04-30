@@ -327,7 +327,7 @@ pub fn view_category<'a>(
     palette: Palette,
 ) -> Element<'a, Message> {
     match category {
-        SettingsCategory::Ui => ui::view(config, draft),
+        SettingsCategory::Ui => ui::view(config, draft, palette),
         SettingsCategory::Terminal => {
             let selected_font = all_font_options
                 .iter()
@@ -338,22 +338,28 @@ pub fn view_category<'a>(
                 font_combo_state,
                 show_all_fonts,
                 selected_font,
+                palette,
             )
         }
         SettingsCategory::Theme => theme::view(config, draft, palette),
-        SettingsCategory::Shortcuts => shortcuts::view(config, draft),
+        SettingsCategory::Shortcuts => shortcuts::view(config, draft, palette),
         SettingsCategory::Ssh => ssh::view(draft, palette),
     }
 }
 
 const LABEL_WIDTH: f32 = 160.0;
 
-pub fn input_row<'a>(label: &'a str, value: &'a str, field: SettingsField) -> Element<'a, Message> {
+pub fn input_row<'a>(
+    label: &'a str,
+    value: &'a str,
+    field: SettingsField,
+    palette: Palette,
+) -> Element<'a, Message> {
     row![
         text(label).size(13).width(Length::Fixed(LABEL_WIDTH)),
         styled_text_input(value, move |next| Message::SettingsInputChanged(
             field, next
-        )),
+        ), palette),
     ]
     .align_y(Alignment::Center)
     .spacing(SPACING_NORMAL)
@@ -366,13 +372,13 @@ pub fn input_row_with_suffix<'a>(
     value: &'a str,
     field: SettingsField,
     suffix: &'a str,
+    palette: Palette,
 ) -> Element<'a, Message> {
-    let palette = Palette::DARK;
     row![
         text(label).size(13).width(Length::Fixed(LABEL_WIDTH)),
         styled_text_input(value, move |next| Message::SettingsInputChanged(
             field, next
-        )),
+        ), palette),
         text(suffix)
             .size(12)
             .color(palette.text_secondary)
@@ -389,8 +395,8 @@ pub fn color_input_row<'a>(
     label: &'a str,
     value: &'a str,
     field: SettingsField,
+    palette: Palette,
 ) -> Element<'a, Message> {
-    let palette = Palette::DARK;
     let parsed = parse_hex_color(value);
     let dot_color = parsed
         .map(|rgb| Color::from_rgb8(rgb[0], rgb[1], rgb[2]))
@@ -415,7 +421,7 @@ pub fn color_input_row<'a>(
             }),
         styled_text_input(value, move |next| Message::SettingsInputChanged(
             field, next
-        )),
+        ), palette),
     ]
     .align_y(Alignment::Center)
     .spacing(SPACING_NORMAL)
@@ -436,14 +442,12 @@ pub fn toggle_row<'a>(label: &'a str, value: bool) -> Element<'a, Message> {
     .into()
 }
 
-pub fn hint_text<'a>(msg: &'a str) -> Element<'a, Message> {
-    let palette = Palette::DARK;
+pub fn hint_text<'a>(msg: &'a str, palette: Palette) -> Element<'a, Message> {
     text(msg).size(11).color(palette.text_secondary).into()
 }
 
 #[allow(dead_code)]
-pub fn divider<'a>() -> Element<'a, Message> {
-    let palette = Palette::DARK;
+pub fn divider<'a>(palette: Palette) -> Element<'a, Message> {
     container(
         rule::horizontal(1).style(move |_theme: &iced::Theme| rule::Style {
             color: Color {
@@ -460,8 +464,7 @@ pub fn divider<'a>() -> Element<'a, Message> {
     .into()
 }
 
-pub fn section<'a>(title: &'a str, body: Element<'a, Message>) -> Element<'a, Message> {
-    let palette = Palette::DARK;
+pub fn section<'a>(title: &'a str, body: Element<'a, Message>, palette: Palette) -> Element<'a, Message> {
     container(
         column(vec![
             text(title).size(14).color(palette.accent).into(),
@@ -501,11 +504,14 @@ pub fn section<'a>(title: &'a str, body: Element<'a, Message>) -> Element<'a, Me
     .into()
 }
 
-fn styled_text_input<'a, F>(value: &'a str, on_input: F) -> text_input::TextInput<'a, Message>
+fn styled_text_input<'a, F>(
+    value: &'a str,
+    on_input: F,
+    palette: Palette,
+) -> text_input::TextInput<'a, Message>
 where
     F: 'a + Fn(String) -> Message,
 {
-    let palette = Palette::DARK;
     text_input("", value)
         .on_input(on_input)
         .padding([6, 10])
@@ -546,11 +552,11 @@ where
 pub fn styled_text_input_small<'a, F>(
     value: &'a str,
     on_input: F,
+    palette: Palette,
 ) -> text_input::TextInput<'a, Message>
 where
     F: 'a + Fn(String) -> Message,
 {
-    let palette = Palette::DARK;
     text_input("", value)
         .on_input(on_input)
         .padding([4, 8])

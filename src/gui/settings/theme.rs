@@ -24,6 +24,7 @@ pub fn view<'a>(
             .spacing(SPACING_NORMAL)
             .width(Length::Fill)
             .into(),
+        palette,
     );
 
     // -- Color palette pickers for fg/bg/cursor --
@@ -52,11 +53,12 @@ pub fn view<'a>(
                 current_preset,
                 &palette,
             ),
-            hint_text("Click a swatch or type hex (#rrggbb)"),
+            hint_text("Click a swatch or type hex (#rrggbb)", palette),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into(),
+        palette,
     );
 
     let opacity_section = section(
@@ -66,21 +68,24 @@ pub fn view<'a>(
             &draft.background_opacity,
             SettingsField::ThemeBackgroundOpacity,
             "0.0 ~ 1.0",
+            palette,
         )])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into(),
+        palette,
     );
 
     let blur_section = section(
         "Blur",
         column(vec![
             toggle_row("Enable blur", draft.blur_enabled),
-            hint_text("On macOS, changing this requires restart."),
+            hint_text("On macOS, changing this requires restart.", palette),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into(),
+        palette,
     );
 
     #[cfg(target_os = "macos")]
@@ -92,12 +97,14 @@ pub fn view<'a>(
                 &draft.macos_blur_radius,
                 SettingsField::ThemeMacosBlurRadius,
                 "0 ~ 100",
+                palette,
             ),
-            hint_text("Controls the intensity of the window background blur effect."),
+            hint_text("Controls the intensity of the window background blur effect.", palette),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into(),
+        palette,
     );
 
     #[cfg(target_os = "macos")]
@@ -290,7 +297,7 @@ fn color_palette_row<'a>(
     // Current color indicator + hex input
     let hex_input = crate::gui::settings::styled_text_input_small(current_hex, move |next| {
         Message::SettingsInputChanged(field, next)
-    });
+    }, *palette);
 
     column![
         row![
