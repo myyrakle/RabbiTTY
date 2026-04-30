@@ -7,7 +7,7 @@ mod shell_picker;
 pub(in crate::gui) use dialog::{DialogButton, confirm_dialog};
 
 use super::{App, Message, SETTINGS_TAB_INDEX};
-use crate::gui::components::{button_primary, panel, tab_bar};
+use crate::gui::components::{button_secondary, panel, tab_bar};
 use crate::gui::render::TerminalProgram;
 use iced::widget::{column, container, image, row, scrollable, stack, text};
 use iced::{Alignment, Element, Length};
@@ -62,7 +62,8 @@ impl App {
             let version_label = text(format!("RabbiTTY v{}", env!("CARGO_PKG_VERSION")))
                 .size(13)
                 .color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4));
-            let new_tab_btn = button_primary("New Tab", palette).on_press(Message::OpenShellPicker);
+            let new_tab_btn =
+                button_secondary("New Tab", palette).on_press(Message::OpenShellPicker);
             container(
                 column![logo, version_label, new_tab_btn]
                     .spacing(12)

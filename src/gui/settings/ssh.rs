@@ -71,7 +71,7 @@ fn profile_card<'a>(
     };
 
     let title_row = row![
-        text(title).size(14).color(palette.accent),
+        text(title).size(14).color(palette.text),
         container("").width(Length::Fill),
         button_secondary("Remove", palette).on_press(Message::RemoveSshProfile(index)),
     ]
@@ -83,8 +83,8 @@ fn profile_card<'a>(
         .height(Length::Fixed(1.0))
         .style(move |_theme: &iced::Theme| iced::widget::container::Style {
             background: Some(Background::Color(Color {
-                a: 0.10,
-                ..palette.accent
+                a: 0.08,
+                ..palette.text
             })),
             ..Default::default()
         });

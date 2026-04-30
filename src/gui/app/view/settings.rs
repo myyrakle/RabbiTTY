@@ -17,13 +17,13 @@ impl App {
             let button_style = move |_theme: &iced::Theme, status: iced::widget::button::Status| {
                 let bg = if is_active {
                     Color {
-                        a: 0.15,
-                        ..palette.accent
+                        a: 0.12,
+                        ..palette.text
                     }
                 } else {
                     match status {
                         iced::widget::button::Status::Hovered => Color {
-                            a: 0.1,
+                            a: 0.08,
                             ..palette.text
                         },
                         _ => Color::TRANSPARENT,
@@ -33,7 +33,7 @@ impl App {
                 iced::widget::button::Style {
                     background: Some(Background::Color(bg)),
                     text_color: if is_active {
-                        palette.accent
+                        palette.text
                     } else {
                         palette.text_secondary
                     },
@@ -80,7 +80,7 @@ impl App {
             }),
             text(self.settings_category.label())
                 .size(16)
-                .color(palette.accent),
+                .color(palette.text),
         ]
         .align_y(iced::Alignment::Center)
         .spacing(SPACING_SMALL);

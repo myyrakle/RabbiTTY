@@ -477,14 +477,14 @@ pub fn section<'a>(
 ) -> Element<'a, Message> {
     container(
         column(vec![
-            text(title).size(14).color(palette.accent).into(),
+            text(title).size(14).color(palette.text).into(),
             container("")
                 .width(Length::Fill)
                 .height(Length::Fixed(1.0))
                 .style(move |_theme: &iced::Theme| container::Style {
                     background: Some(Background::Color(Color {
-                        a: 0.15,
-                        ..palette.accent
+                        a: 0.10,
+                        ..palette.text
                     })),
                     ..Default::default()
                 })
