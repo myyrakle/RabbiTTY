@@ -88,8 +88,7 @@ fn parse_hex(s: &str) -> Option<[u8; 3]> {
 
 static ALL_PRESETS: OnceLock<Vec<ColorPreset>> = OnceLock::new();
 
-/// Returns all color presets (built-in + user custom themes).
-/// Loaded once on first call and cached for the lifetime of the process.
+/// Returns all color presets (built-in + user custom themes)
 pub fn all_presets() -> &'static [ColorPreset] {
     ALL_PRESETS.get_or_init(|| {
         let mut presets = builtin_presets();
@@ -464,12 +463,9 @@ pub(super) fn resolve_rgb(
 }
 
 /// Minimum WCAG contrast ratio for terminal text readability.
-/// 3.0 is a good balance - ensures dark blue/red are visible on dark backgrounds
-/// without washing out intentionally dim colors too aggressively.
 const MIN_CONTRAST_RATIO: f32 = 3.0;
 
 /// Ensure foreground has minimum contrast against background.
-/// If contrast is too low, lightens or darkens fg until the ratio is met.
 pub(super) fn enforce_min_contrast(fg: Rgb, bg: Rgb) -> Rgb {
     let fg_lum = relative_luminance(fg);
     let bg_lum = relative_luminance(bg);
