@@ -2,7 +2,7 @@ use super::super::{App, Message, SETTINGS_TAB_INDEX};
 use super::{TAB_BAR_SCROLLABLE_ID, TERMINAL_SCROLLABLE_ID};
 use crate::config::AppConfigUpdates;
 use crate::session::OutputEvent;
-use iced::widget::operation::scroll_to;
+use iced::widget::operation::{scroll_to, snap_to, snap_to_end};
 use iced::widget::scrollable;
 use iced::{Size, Task};
 
@@ -36,17 +36,10 @@ impl App {
         if history == 0 {
             return Task::none();
         }
-        let dims = tab.size();
-        let cell_height = self.config.terminal.cell_height.max(1.0);
-        // Match the view's content height: (history + lines) * cell_height
-        let total_content = (history + dims.lines) as f32 * cell_height;
         let rel_y = 1.0 - (offset as f32 / history as f32).clamp(0.0, 1.0);
-        scroll_to(
+        snap_to(
             TERMINAL_SCROLLABLE_ID.clone(),
-            scrollable::AbsoluteOffset {
-                x: 0.0,
-                y: rel_y * total_content,
-            },
+            scrollable::RelativeOffset { x: 0.0, y: rel_y },
         )
     }
 
@@ -64,13 +57,7 @@ impl App {
         if !self.scroll_follow_bottom {
             return Task::none();
         }
-        scroll_to(
-            TERMINAL_SCROLLABLE_ID.clone(),
-            scrollable::AbsoluteOffset {
-                x: 0.0,
-                y: f32::MAX,
-            },
-        )
+        snap_to_end(TERMINAL_SCROLLABLE_ID.clone())
     }
 
     pub(super) fn handle_tab_bar_scroll(&mut self, delta: f32) -> Task<Message> {
