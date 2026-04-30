@@ -193,7 +193,12 @@ fn browser_tab<'a>(
     } else {
         title.into()
     };
-    let index_label = text(format!("{}", index + 1)).size(10).color(Color {
+    let index_label = if index == crate::gui::app::SETTINGS_TAB_INDEX {
+        text("\u{2699}".to_string()).size(10)
+    } else {
+        text(format!("{}", index + 1)).size(10)
+    }
+    .color(Color {
         a: 0.35,
         ..palette.text_secondary
     });
