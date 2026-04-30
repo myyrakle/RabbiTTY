@@ -25,8 +25,8 @@ pub fn tab_bar<'a>(
             let gap = container(text("")).width(24).height(Length::Shrink).style(
                 move |_theme: &Theme| container::Style {
                     background: Some(Background::Color(Color {
-                        a: 0.2,
-                        ..palette.accent
+                        a: 0.15,
+                        ..palette.text
                     })),
                     border: Border {
                         radius: 4.0.into(),
@@ -276,13 +276,15 @@ fn browser_tab<'a>(
     );
 
     if is_active {
-        // Active tab with bottom accent indicator
         let indicator =
             container(text(""))
                 .width(Length::Fill)
                 .height(2)
                 .style(move |_theme: &Theme| container::Style {
-                    background: Some(Background::Color(palette.accent)),
+                    background: Some(Background::Color(Color {
+                        a: 0.6,
+                        ..palette.text
+                    })),
                     ..Default::default()
                 });
 

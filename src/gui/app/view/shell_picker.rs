@@ -183,16 +183,9 @@ fn picker_item(
     let mut content_items: Vec<Element<'static, Message>> = vec![
         text(label)
             .size(13)
-            .color(if selected {
-                Color {
-                    a: alpha,
-                    ..palette.background
-                }
-            } else {
-                Color {
-                    a: alpha,
-                    ..palette.text
-                }
+            .color(Color {
+                a: alpha,
+                ..palette.text
             })
             .into(),
     ];
@@ -201,16 +194,9 @@ fn picker_item(
         content_items.push(
             text(sub)
                 .size(10)
-                .color(if selected {
-                    Color {
-                        a: 0.7 * alpha,
-                        ..palette.background
-                    }
-                } else {
-                    Color {
-                        a: alpha * 0.7,
-                        ..palette.text_secondary
-                    }
+                .color(Color {
+                    a: alpha * 0.7,
+                    ..palette.text_secondary
                 })
                 .into(),
         );
@@ -225,12 +211,12 @@ fn picker_item(
                 if selected {
                     iced::widget::button::Style {
                         background: Some(Background::Color(Color {
-                            a: alpha,
-                            ..palette.accent
+                            a: 0.15 * alpha,
+                            ..palette.text
                         })),
                         text_color: Color {
                             a: alpha,
-                            ..palette.background
+                            ..palette.text
                         },
                         border: Border {
                             radius: RADIUS_SMALL.into(),
