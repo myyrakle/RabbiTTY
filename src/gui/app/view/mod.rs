@@ -153,6 +153,7 @@ impl App {
                 .direction(scrollable::Direction::Vertical(
                     scrollable::Scrollbar::new().width(8).scroller_width(8),
                 ))
+                .anchor_bottom()
                 .on_scroll(|viewport: scrollable::Viewport| {
                     let rel = viewport.relative_offset();
                     Message::TerminalScroll(rel.y)

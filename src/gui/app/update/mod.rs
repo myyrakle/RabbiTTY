@@ -246,14 +246,16 @@ impl App {
                 }
             }
             Message::TerminalScroll(rel_y) => {
-                if self.scroll_follow_bottom || self.ignore_scrollable_sync > 0 {
-                    if self.ignore_scrollable_sync > 0 {
-                        self.ignore_scrollable_sync -= 1;
-                    }
+                if self.ignore_scrollable_sync > 0 {
+                    self.ignore_scrollable_sync -= 1;
                 } else if self.active_tab != SETTINGS_TAB_INDEX
                     && let Some(tab) = self.tabs.get_mut(self.active_tab)
                 {
-                    tab.scroll_to_relative(rel_y);
+                    // With anchor_bottom: rel_y=0 is bottom, rel_y=1 is top.
+                    // scroll_to_relative expects rel=1.0 as bottom, rel=0.0 as top.
+                    tab.scroll_to_relative(1.0 - rel_y);
+                    let (offset, _) = tab.scroll_position();
+                    self.scroll_follow_bottom = offset == 0;
                 }
             }
             Message::TerminalWheelScroll(raw_delta) => {
