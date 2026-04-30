@@ -4,15 +4,17 @@ use crate::gui::settings::{
     SettingsDraft, SettingsField, format_rgb, hint_text, input_row_with_suffix, section, toggle_row,
 };
 use crate::gui::theme::{Palette, RADIUS_SMALL, SPACING_NORMAL};
-use crate::terminal::theme::{ColorPreset, PRESETS};
+use crate::terminal::theme::{ColorPreset, all_presets};
 use iced::widget::{Column, Row, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length};
 
 const LABEL_WIDTH: f32 = 160.0;
 
-pub fn view<'a>(_config: &'a AppConfig, draft: &'a SettingsDraft) -> Element<'a, Message> {
-    let palette = Palette::DARK;
-
+pub fn view<'a>(
+    _config: &'a AppConfig,
+    draft: &'a SettingsDraft,
+    palette: Palette,
+) -> Element<'a, Message> {
     // -- Preset picker: 2-column grid of visual cards --
     let grid_rows = build_preset_grid(draft, &palette);
 
@@ -22,6 +24,7 @@ pub fn view<'a>(_config: &'a AppConfig, draft: &'a SettingsDraft) -> Element<'a,
             .spacing(SPACING_NORMAL)
             .width(Length::Fill)
             .into(),
+        palette,
     );
 
     // -- Color palette pickers for fg/bg/cursor --
@@ -50,11 +53,12 @@ pub fn view<'a>(_config: &'a AppConfig, draft: &'a SettingsDraft) -> Element<'a,
                 current_preset,
                 &palette,
             ),
-            hint_text("Click a swatch or type hex (#rrggbb)"),
+            hint_text("Click a swatch or type hex (#rrggbb)", palette),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into(),
+        palette,
     );
 
     let opacity_section = section(
@@ -64,21 +68,24 @@ pub fn view<'a>(_config: &'a AppConfig, draft: &'a SettingsDraft) -> Element<'a,
             &draft.background_opacity,
             SettingsField::ThemeBackgroundOpacity,
             "0.0 ~ 1.0",
+            palette,
         )])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into(),
+        palette,
     );
 
     let blur_section = section(
         "Blur",
         column(vec![
             toggle_row("Enable blur", draft.blur_enabled),
-            hint_text("On macOS, changing this requires restart."),
+            hint_text("On macOS, changing this requires restart.", palette),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into(),
+        palette,
     );
 
     #[cfg(target_os = "macos")]
@@ -90,12 +97,17 @@ pub fn view<'a>(_config: &'a AppConfig, draft: &'a SettingsDraft) -> Element<'a,
                 &draft.macos_blur_radius,
                 SettingsField::ThemeMacosBlurRadius,
                 "0 ~ 100",
+                palette,
             ),
-            hint_text("Controls the intensity of the window background blur effect."),
+            hint_text(
+                "Controls the intensity of the window background blur effect.",
+                palette,
+            ),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into(),
+        palette,
     );
 
     #[cfg(target_os = "macos")]
@@ -123,7 +135,7 @@ pub fn view<'a>(_config: &'a AppConfig, draft: &'a SettingsDraft) -> Element<'a,
 
 /// Build preset cards in a 2-column grid.
 fn build_preset_grid<'a>(draft: &'a SettingsDraft, palette: &Palette) -> Vec<Element<'a, Message>> {
-    let cards: Vec<Element<'a, Message>> = PRESETS
+    let cards: Vec<Element<'a, Message>> = all_presets()
         .iter()
         .map(|preset| build_preset_card(preset, draft, palette))
         .collect();
@@ -159,7 +171,7 @@ fn build_preset_card<'a>(
     draft: &'a SettingsDraft,
     palette: &Palette,
 ) -> Element<'a, Message> {
-    let is_selected = draft.color_scheme.eq_ignore_ascii_case(preset.name);
+    let is_selected = draft.color_scheme.eq_ignore_ascii_case(&preset.name);
 
     // Color swatches: bg, fg, then 6 ANSI colors
     let swatches: Vec<Element<'a, Message>> = std::iter::once(preset.bg)
@@ -185,8 +197,8 @@ fn build_preset_card<'a>(
     };
     let border_width = if is_selected { 2.0 } else { 1.0 };
 
-    let name = preset.name;
-    let card_content = column![text(name).size(12).color(card_fg), swatch_row]
+    let name = &preset.name;
+    let card_content = column![text(name.as_str()).size(12).color(card_fg), swatch_row]
         .spacing(6)
         .width(Length::Fill);
 
@@ -286,9 +298,11 @@ fn color_palette_row<'a>(
     let swatch_grid = Row::with_children(swatches).spacing(4).width(Length::Fill);
 
     // Current color indicator + hex input
-    let hex_input = crate::gui::settings::styled_text_input_small(current_hex, move |next| {
-        Message::SettingsInputChanged(field, next)
-    });
+    let hex_input = crate::gui::settings::styled_text_input_small(
+        current_hex,
+        move |next| Message::SettingsInputChanged(field, next),
+        *palette,
+    );
 
     column![
         row![

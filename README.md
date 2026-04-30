@@ -22,6 +22,45 @@ Rabbitty is a terminal emulator chasing `foot`-like memory thrift and cross-plat
 - [ ] Easy file upload & download with SFTP
 - [ ] Split terminal in single tab
 
+## Custom Themes
+
+Rabbitty ships with built-in color schemes (Catppuccin Mocha, Dracula, Tokyo Night, Nord, One Dark, Gruvbox Dark, Solarized Dark) and supports user-defined themes via TOML files.
+
+### Adding a custom theme
+
+1. Create the themes directory:
+   ```
+   mkdir -p ~/.config/rabbitty/themes
+   ```
+2. Add a `.toml` file (e.g. `~/.config/rabbitty/themes/my-theme.toml`):
+   ```toml
+   name = "My Custom Theme"
+   foreground = "#c0caf5"
+   background = "#1a1b26"
+   cursor = "#c0caf5"
+
+   [ansi]
+   black = "#15161e"
+   red = "#f7768e"
+   green = "#9ece6a"
+   yellow = "#e0af68"
+   blue = "#7aa2f7"
+   magenta = "#bb9af7"
+   cyan = "#7dcfff"
+   white = "#a9b1d6"
+   bright_black = "#414868"
+   bright_red = "#f7768e"
+   bright_green = "#9ece6a"
+   bright_yellow = "#e0af68"
+   bright_blue = "#7aa2f7"
+   bright_magenta = "#bb9af7"
+   bright_cyan = "#7dcfff"
+   bright_white = "#c0caf5"
+   ```
+3. Restart Rabbitty — the theme appears in **Settings > Theme > Color Scheme**.
+
+A theme with the same name as a built-in will override it. See `assets/example-theme.toml` for a full reference.
+
 ## Supported Platforms
 
 - Linux (x86_64, aarch64)

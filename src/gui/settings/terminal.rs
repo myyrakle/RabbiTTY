@@ -3,7 +3,7 @@ use crate::gui::app::Message;
 use crate::gui::settings::{
     SettingsDraft, SettingsField, TerminalFontOption, hint_text, input_row_with_suffix, section,
 };
-use crate::gui::theme::SPACING_NORMAL;
+use crate::gui::theme::{Palette, SPACING_NORMAL};
 use iced::widget::{checkbox, column, combo_box, row, text};
 use iced::{Alignment, Element, Length};
 
@@ -13,6 +13,7 @@ pub fn view<'a>(
     font_combo_state: &'a combo_box::State<TerminalFontOption>,
     show_all_fonts: bool,
     selected_font: Option<&'a TerminalFontOption>,
+    palette: Palette,
 ) -> Element<'a, Message> {
     let font_section = section(
         "Font",
@@ -22,6 +23,7 @@ pub fn view<'a>(
                 &draft.terminal_font_size,
                 SettingsField::TerminalFontSize,
                 "pt",
+                palette,
             ),
             row![
                 text("Font family").size(13).width(Length::Fixed(160.0)),
@@ -45,15 +47,19 @@ pub fn view<'a>(
                     .text_size(13),
             ]
             .into(),
-            hint_text(if draft.terminal_font_selection.is_empty() {
-                "Using bundled DejaVu Sans Mono."
-            } else {
-                "Monospaced fonts are recommended for terminal text."
-            }),
+            hint_text(
+                if draft.terminal_font_selection.is_empty() {
+                    "Using bundled DejaVu Sans Mono."
+                } else {
+                    "Monospaced fonts are recommended for terminal text."
+                },
+                palette,
+            ),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into(),
+        palette,
     );
 
     let padding_section = section(
@@ -64,17 +70,20 @@ pub fn view<'a>(
                 &draft.terminal_padding_x,
                 SettingsField::TerminalPaddingX,
                 "px",
+                palette,
             ),
             input_row_with_suffix(
                 "Vertical",
                 &draft.terminal_padding_y,
                 SettingsField::TerminalPaddingY,
                 "px",
+                palette,
             ),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into(),
+        palette,
     );
 
     column(vec![font_section, padding_section])

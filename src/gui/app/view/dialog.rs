@@ -15,9 +15,8 @@ pub(in crate::gui) fn confirm_dialog<'a>(
     description: &str,
     buttons: Vec<DialogButton>,
     on_dismiss: Message,
+    palette: Palette,
 ) -> Element<'a, Message> {
-    let palette = Palette::DARK;
-
     let backdrop = mouse_area(
         container(text(""))
             .width(Length::Fill)

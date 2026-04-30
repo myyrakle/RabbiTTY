@@ -4,6 +4,7 @@ use iced::widget::mouse_area;
 use iced::widget::{button, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
+#[allow(clippy::too_many_arguments)]
 pub fn tab_bar<'a>(
     tabs: impl Iterator<Item = (&'a str, usize, bool)>,
     on_add: Message,
@@ -12,9 +13,8 @@ pub fn tab_bar<'a>(
     tab_alpha: f32,
     dragging_tab: Option<usize>,
     drag_target: Option<usize>,
+    palette: Palette,
 ) -> Element<'a, Message> {
-    let palette = Palette::DARK;
-
     let mut tab_elements: Vec<Element<Message>> = Vec::new();
     let is_reordering =
         dragging_tab.is_some() && drag_target.is_some() && dragging_tab != drag_target;
@@ -40,7 +40,7 @@ pub fn tab_bar<'a>(
             tab_elements.push(gap.into());
         }
 
-        let tab_item = browser_tab(title, index, is_active, tab_alpha);
+        let tab_item = browser_tab(title, index, is_active, tab_alpha, palette);
         let tab_item = mouse_area(tab_item)
             .on_press(Message::TabSelected(index))
             .on_enter(Message::TabDragHover(index))
@@ -73,7 +73,7 @@ pub fn tab_bar<'a>(
         .on_press(on_add)
         .padding([6, 10])
         .style(icon_style);
-    let settings_btn = button(text("⚙").size(13))
+    let settings_btn = button(text("\u{2699}").size(13))
         .on_press(on_settings)
         .padding([6, 10])
         .style(icon_style);
@@ -89,7 +89,7 @@ pub fn tab_bar<'a>(
         .on_scroll(|viewport: scrollable::Viewport| {
             Message::TabBarScrolled(viewport.absolute_offset().x)
         })
-        .style(crate::gui::theme::scrollbar_style)
+        .style(crate::gui::theme::scrollbar_style(palette))
         .width(Length::Fill)
         .height(Length::Shrink);
 
@@ -127,15 +127,15 @@ pub fn tab_bar<'a>(
         };
 
         row![
-            button(text("─").size(12))
+            button(text("\u{2500}").size(12))
                 .on_press(Message::WindowMinimize)
                 .padding([6, 12])
                 .style(win_style(hover_subtle)),
-            button(text("□").size(12))
+            button(text("\u{25a1}").size(12))
                 .on_press(Message::WindowMaximize)
                 .padding([6, 12])
                 .style(win_style(hover_subtle)),
-            button(text("✕").size(12))
+            button(text("\u{2715}").size(12))
                 .on_press(Message::Exit)
                 .padding([6, 12])
                 .style(win_style(hover_close)),
@@ -184,23 +184,27 @@ fn browser_tab<'a>(
     index: usize,
     is_active: bool,
     tab_alpha: f32,
+    palette: Palette,
 ) -> Element<'a, Message> {
-    let palette = Palette::DARK;
-
     const MAX_TITLE_LEN: usize = 24;
     let display_title: std::borrow::Cow<'a, str> = if title.chars().count() > MAX_TITLE_LEN {
         let truncated: String = title.chars().take(MAX_TITLE_LEN - 1).collect();
-        format!("{truncated}…").into()
+        format!("{truncated}\u{2026}").into()
     } else {
         title.into()
     };
-    let index_label = text(format!("{}", index + 1)).size(10).color(Color {
+    let index_label = if index == crate::gui::app::SETTINGS_TAB_INDEX {
+        text("\u{2699}".to_string()).size(10)
+    } else {
+        text(format!("{}", index + 1)).size(10)
+    }
+    .color(Color {
         a: 0.35,
         ..palette.text_secondary
     });
     let tab_text = text(display_title).size(12);
 
-    let close_btn = button(text("✕").size(9))
+    let close_btn = button(text("\u{2715}").size(9))
         .on_press(Message::CloseTab(index))
         .padding([2, 5])
         .style(

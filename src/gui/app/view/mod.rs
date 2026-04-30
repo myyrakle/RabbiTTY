@@ -22,6 +22,7 @@ impl App {
     }
 
     fn view_main(&self) -> Element<'_, Message> {
+        let palette = self.palette;
         let tabs_iter = self
             .tabs
             .iter()
@@ -47,6 +48,7 @@ impl App {
             tab_alpha,
             self.dragging_tab,
             self.drag_target,
+            palette,
         );
 
         let main_content: Element<Message> = if self.active_tab == SETTINGS_TAB_INDEX {
@@ -60,7 +62,7 @@ impl App {
             let version_label = text(format!("RabbiTTY v{}", env!("CARGO_PKG_VERSION")))
                 .size(13)
                 .color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4));
-            let new_tab_btn = button_primary("New Tab").on_press(Message::OpenShellPicker);
+            let new_tab_btn = button_primary("New Tab", palette).on_press(Message::OpenShellPicker);
             container(
                 column![logo, version_label, new_tab_btn]
                     .spacing(12)
@@ -98,6 +100,7 @@ impl App {
                     },
                 ],
                 Message::CancelRestartForBlur,
+                palette,
             );
         }
 
@@ -152,7 +155,7 @@ impl App {
                     let rel = viewport.relative_offset();
                     Message::TerminalScroll(rel.y)
                 })
-                .style(crate::gui::theme::scrollbar_style)
+                .style(crate::gui::theme::scrollbar_style(self.palette))
                 .width(Length::Fixed(14.0))
                 .height(Length::Fill);
 

@@ -112,6 +112,7 @@ pub struct App {
     pub(super) resize_debounce_seq: u64,
     pub(super) resize_debounce_spawned_seq: u64,
     pub(super) shell_picker_anim: Animation<bool>,
+    pub(super) palette: crate::gui::theme::Palette,
     pub(super) window_style_applied: bool,
     #[cfg(target_os = "macos")]
     pub(super) show_restart_confirm: bool,
@@ -123,6 +124,7 @@ pub struct App {
 
 impl App {
     pub fn new(config: AppConfig) -> Self {
+        let palette = crate::gui::theme::Palette::from_theme(&config.theme);
         let all_font_options = build_all_font_options(config.terminal.font_selection.as_deref());
         let show_all_fonts = false;
         let font_combo_state = build_font_combo_state(
@@ -154,6 +156,7 @@ impl App {
             resize_debounce_pending: false,
             resize_debounce_seq: 0,
             resize_debounce_spawned_seq: 0,
+            palette,
             shell_picker_anim: Animation::new(false)
                 .duration(std::time::Duration::from_millis(250))
                 .easing(iced::animation::Easing::EaseOutQuint),
