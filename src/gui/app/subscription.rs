@@ -44,7 +44,7 @@ impl App {
                     }
                 })
             }),
-            event::listen_with(|event, _status, _id| match event {
+            event::listen_with(|event, status, _id| match event {
                 Event::Window(window::Event::CloseRequested) => Some(Message::Exit),
                 Event::Window(window::Event::Resized(size)) => Some(Message::WindowResized(size)),
                 Event::Keyboard(keyboard::Event::KeyPressed {
@@ -72,7 +72,9 @@ impl App {
                 Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                     Some(Message::TabDragRelease)
                 }
-                Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+                Event::Mouse(mouse::Event::WheelScrolled { delta })
+                    if !matches!(status, event::Status::Captured) =>
+                {
                     let (lines_y, pixels_x) = match delta {
                         mouse::ScrollDelta::Lines { x, y } => (y, x * 30.0),
                         mouse::ScrollDelta::Pixels { x, y } => (y / 20.0, x),
