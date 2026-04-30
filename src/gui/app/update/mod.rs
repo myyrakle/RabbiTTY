@@ -163,14 +163,14 @@ impl App {
             }
             Message::PtyOutput(event) => {
                 self.handle_pty_event(event);
-                self.ignore_scrollable_sync = true;
+                self.ignore_scrollable_sync = 2;
                 return self.sync_terminal_scrollable();
             }
             Message::PtyOutputBatch(events) => {
                 for event in events {
                     self.handle_pty_event(event);
                 }
-                self.ignore_scrollable_sync = true;
+                self.ignore_scrollable_sync = 2;
                 return self.sync_terminal_scrollable();
             }
             Message::KeyPressed {
@@ -228,7 +228,7 @@ impl App {
                     tab.clear_selection();
                 }
                 self.ime_preedit = None;
-                self.ignore_scrollable_sync = true;
+                self.ignore_scrollable_sync = 2;
                 return self.sync_terminal_scrollable();
             }
             Message::ImePreedit(text, cursor) => {
@@ -239,8 +239,8 @@ impl App {
                 }
             }
             Message::TerminalScroll(rel_y) => {
-                if self.ignore_scrollable_sync {
-                    self.ignore_scrollable_sync = false;
+                if self.ignore_scrollable_sync > 0 {
+                    self.ignore_scrollable_sync -= 1;
                 } else if self.active_tab != SETTINGS_TAB_INDEX
                     && let Some(tab) = self.tabs.get_mut(self.active_tab)
                 {
@@ -282,7 +282,7 @@ impl App {
                     .get(self.active_tab)
                     .is_some_and(|t| !t.mouse_mode() && !t.alt_screen())
                 {
-                    self.ignore_scrollable_sync = true;
+                    self.ignore_scrollable_sync = 2;
                     return self.sync_terminal_scrollable_forced();
                 }
             }
@@ -424,7 +424,7 @@ impl App {
             tab.clear_selection();
             tab.handle_key(&key, modifiers, text.as_deref());
         }
-        self.ignore_scrollable_sync = true;
+        self.ignore_scrollable_sync = 2;
         self.sync_terminal_scrollable()
     }
 
