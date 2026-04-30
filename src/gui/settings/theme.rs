@@ -4,7 +4,7 @@ use crate::gui::settings::{
     SettingsDraft, SettingsField, format_rgb, hint_text, input_row_with_suffix, section, toggle_row,
 };
 use crate::gui::theme::{Palette, RADIUS_SMALL, SPACING_NORMAL};
-use crate::terminal::theme::{ColorPreset, PRESETS};
+use crate::terminal::theme::{ColorPreset, all_presets};
 use iced::widget::{Column, Row, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length};
 
@@ -135,7 +135,7 @@ pub fn view<'a>(
 
 /// Build preset cards in a 2-column grid.
 fn build_preset_grid<'a>(draft: &'a SettingsDraft, palette: &Palette) -> Vec<Element<'a, Message>> {
-    let cards: Vec<Element<'a, Message>> = PRESETS
+    let cards: Vec<Element<'a, Message>> = all_presets()
         .iter()
         .map(|preset| build_preset_card(preset, draft, palette))
         .collect();
@@ -171,7 +171,7 @@ fn build_preset_card<'a>(
     draft: &'a SettingsDraft,
     palette: &Palette,
 ) -> Element<'a, Message> {
-    let is_selected = draft.color_scheme.eq_ignore_ascii_case(preset.name);
+    let is_selected = draft.color_scheme.eq_ignore_ascii_case(&preset.name);
 
     // Color swatches: bg, fg, then 6 ANSI colors
     let swatches: Vec<Element<'a, Message>> = std::iter::once(preset.bg)
@@ -197,8 +197,8 @@ fn build_preset_card<'a>(
     };
     let border_width = if is_selected { 2.0 } else { 1.0 };
 
-    let name = preset.name;
-    let card_content = column![text(name).size(12).color(card_fg), swatch_row]
+    let name = &preset.name;
+    let card_content = column![text(name.as_str()).size(12).color(card_fg), swatch_row]
         .spacing(6)
         .width(Length::Fill);
 
