@@ -234,6 +234,7 @@ impl App {
                     tab.clear_selection();
                 }
                 self.ime_preedit = None;
+                self.scroll_follow_bottom = true;
                 self.ignore_scrollable_sync = 2;
                 return self.sync_terminal_scrollable();
             }
@@ -245,8 +246,10 @@ impl App {
                 }
             }
             Message::TerminalScroll(rel_y) => {
-                if self.ignore_scrollable_sync > 0 {
-                    self.ignore_scrollable_sync -= 1;
+                if self.scroll_follow_bottom || self.ignore_scrollable_sync > 0 {
+                    if self.ignore_scrollable_sync > 0 {
+                        self.ignore_scrollable_sync -= 1;
+                    }
                 } else if self.active_tab != SETTINGS_TAB_INDEX
                     && let Some(tab) = self.tabs.get_mut(self.active_tab)
                 {
@@ -281,6 +284,9 @@ impl App {
                         if delta != 0 {
                             tab.scroll(delta);
                         }
+                        // Update follow-bottom based on resulting position
+                        let (offset, _) = tab.scroll_position();
+                        self.scroll_follow_bottom = offset == 0;
                     }
                 }
                 if self
@@ -434,6 +440,7 @@ impl App {
             tab.clear_selection();
             tab.handle_key(&key, modifiers, text.as_deref());
         }
+        self.scroll_follow_bottom = true;
         self.ignore_scrollable_sync = 2;
         self.sync_terminal_scrollable()
     }

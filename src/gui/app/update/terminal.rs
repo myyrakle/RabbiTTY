@@ -57,15 +57,13 @@ impl App {
         let Some(tab) = self.tabs.get(self.active_tab) else {
             return Task::none();
         };
-        let (offset, history) = tab.scroll_position();
+        let (_offset, history) = tab.scroll_position();
         if history == 0 {
             return Task::none();
         }
-        if offset > 0 {
+        if !self.scroll_follow_bottom {
             return Task::none();
         }
-        // Use f32::MAX so iced clamps to the actual bottom, avoiding
-        // mismatches between the calculated offset and the view's content height.
         scroll_to(
             TERMINAL_SCROLLABLE_ID.clone(),
             scrollable::AbsoluteOffset {
