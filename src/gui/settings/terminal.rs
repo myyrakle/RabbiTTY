@@ -47,11 +47,14 @@ pub fn view<'a>(
                     .text_size(13),
             ]
             .into(),
-            hint_text(if draft.terminal_font_selection.is_empty() {
-                "Using bundled DejaVu Sans Mono."
-            } else {
-                "Monospaced fonts are recommended for terminal text."
-            }, palette),
+            hint_text(
+                if draft.terminal_font_selection.is_empty() {
+                    "Using bundled DejaVu Sans Mono."
+                } else {
+                    "Monospaced fonts are recommended for terminal text."
+                },
+                palette,
+            ),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)

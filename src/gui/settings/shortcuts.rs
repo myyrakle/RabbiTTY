@@ -5,7 +5,11 @@ use crate::gui::theme::{Palette, SPACING_NORMAL};
 use iced::widget::column;
 use iced::{Element, Length};
 
-pub fn view<'a>(_config: &'a AppConfig, draft: &'a SettingsDraft, palette: Palette) -> Element<'a, Message> {
+pub fn view<'a>(
+    _config: &'a AppConfig,
+    draft: &'a SettingsDraft,
+    palette: Palette,
+) -> Element<'a, Message> {
     let app_section = section(
         "Application",
         column(vec![
@@ -39,8 +43,16 @@ pub fn view<'a>(_config: &'a AppConfig, draft: &'a SettingsDraft, palette: Palet
                 SettingsField::ShortcutPrevTab,
                 palette,
             ),
-            input_row("Quit", &draft.shortcut_quit, SettingsField::ShortcutQuit, palette),
-            hint_text("Format: Command+T, Ctrl+W, Ctrl+PageDown, Command+Comma", palette),
+            input_row(
+                "Quit",
+                &draft.shortcut_quit,
+                SettingsField::ShortcutQuit,
+                palette,
+            ),
+            hint_text(
+                "Format: Command+T, Ctrl+W, Ctrl+PageDown, Command+Comma",
+                palette,
+            ),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)

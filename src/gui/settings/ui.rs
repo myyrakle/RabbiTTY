@@ -5,7 +5,11 @@ use crate::gui::theme::{Palette, SPACING_NORMAL};
 use iced::widget::column;
 use iced::{Element, Length};
 
-pub fn view<'a>(_config: &'a AppConfig, draft: &'a SettingsDraft, palette: Palette) -> Element<'a, Message> {
+pub fn view<'a>(
+    _config: &'a AppConfig,
+    draft: &'a SettingsDraft,
+    palette: Palette,
+) -> Element<'a, Message> {
     let window_section = section(
         "Window",
         column(vec![

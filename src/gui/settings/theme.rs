@@ -99,7 +99,10 @@ pub fn view<'a>(
                 "0 ~ 100",
                 palette,
             ),
-            hint_text("Controls the intensity of the window background blur effect.", palette),
+            hint_text(
+                "Controls the intensity of the window background blur effect.",
+                palette,
+            ),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
@@ -295,9 +298,11 @@ fn color_palette_row<'a>(
     let swatch_grid = Row::with_children(swatches).spacing(4).width(Length::Fill);
 
     // Current color indicator + hex input
-    let hex_input = crate::gui::settings::styled_text_input_small(current_hex, move |next| {
-        Message::SettingsInputChanged(field, next)
-    }, *palette);
+    let hex_input = crate::gui::settings::styled_text_input_small(
+        current_hex,
+        move |next| Message::SettingsInputChanged(field, next),
+        *palette,
+    );
 
     column![
         row![

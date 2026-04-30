@@ -357,9 +357,11 @@ pub fn input_row<'a>(
 ) -> Element<'a, Message> {
     row![
         text(label).size(13).width(Length::Fixed(LABEL_WIDTH)),
-        styled_text_input(value, move |next| Message::SettingsInputChanged(
-            field, next
-        ), palette),
+        styled_text_input(
+            value,
+            move |next| Message::SettingsInputChanged(field, next),
+            palette
+        ),
     ]
     .align_y(Alignment::Center)
     .spacing(SPACING_NORMAL)
@@ -376,9 +378,11 @@ pub fn input_row_with_suffix<'a>(
 ) -> Element<'a, Message> {
     row![
         text(label).size(13).width(Length::Fixed(LABEL_WIDTH)),
-        styled_text_input(value, move |next| Message::SettingsInputChanged(
-            field, next
-        ), palette),
+        styled_text_input(
+            value,
+            move |next| Message::SettingsInputChanged(field, next),
+            palette
+        ),
         text(suffix)
             .size(12)
             .color(palette.text_secondary)
@@ -419,9 +423,11 @@ pub fn color_input_row<'a>(
                 },
                 ..Default::default()
             }),
-        styled_text_input(value, move |next| Message::SettingsInputChanged(
-            field, next
-        ), palette),
+        styled_text_input(
+            value,
+            move |next| Message::SettingsInputChanged(field, next),
+            palette
+        ),
     ]
     .align_y(Alignment::Center)
     .spacing(SPACING_NORMAL)
@@ -464,7 +470,11 @@ pub fn divider<'a>(palette: Palette) -> Element<'a, Message> {
     .into()
 }
 
-pub fn section<'a>(title: &'a str, body: Element<'a, Message>, palette: Palette) -> Element<'a, Message> {
+pub fn section<'a>(
+    title: &'a str,
+    body: Element<'a, Message>,
+    palette: Palette,
+) -> Element<'a, Message> {
     container(
         column(vec![
             text(title).size(14).color(palette.accent).into(),
