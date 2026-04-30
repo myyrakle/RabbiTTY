@@ -1,6 +1,7 @@
 use iced::advanced::input_method::{InputMethod, Preedit, Purpose};
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
+use iced::advanced::widget::Operation;
 use iced::advanced::widget::Widget;
 use iced::advanced::widget::tree::{self, Tree};
 use iced::advanced::{Clipboard, Shell};
@@ -61,6 +62,18 @@ where
         limits: &layout::Limits,
     ) -> layout::Node {
         self.content.as_widget_mut().layout(tree, renderer, limits)
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        self.content
+            .as_widget_mut()
+            .operate(tree, layout, renderer, operation);
     }
 
     fn update(
