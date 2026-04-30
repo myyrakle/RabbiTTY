@@ -87,12 +87,13 @@ fn text_vs_main(input : TextVertexIn) -> TextVertexOut {
 }
 
 // Grayscale anti-aliased text rendering.
-// Uses the atlas alpha channel (max of subpixel coverage) as glyph opacity,
-// avoiding color fringing on transparent backgrounds and non-RGB-stripe panels.
+// Subpixel coverage is averaged into a single alpha value, avoiding
+// color fringing on transparent backgrounds and non-RGB-stripe panels.
 @fragment
 fn text_fs_subpixel(input : TextVertexOut) -> @location(0) vec4<f32> {
     let cov = textureSample(text_atlas, text_sampler, input.uv);
-    return vec4<f32>(input.color.rgb, cov.a * input.color.a);
+    let gray = (cov.r + cov.g + cov.b) / 3.0;
+    return vec4<f32>(input.color.rgb, gray * input.color.a);
 }
 
 struct CompositeVertexIn {
