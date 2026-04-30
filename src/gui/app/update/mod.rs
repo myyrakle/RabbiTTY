@@ -218,6 +218,12 @@ impl App {
                     let _ = session.send_bytes(text.as_bytes());
                 }
             }
+            Message::ImeStateChanged(active) => {
+                self.ime_active = active;
+                if !active {
+                    self.ime_preedit = None;
+                }
+            }
             Message::ImeCommit(text) => {
                 if !text.is_empty()
                     && self.active_tab != SETTINGS_TAB_INDEX
@@ -416,6 +422,10 @@ impl App {
                     | Named::Hyper
             )
         ) {
+            return Task::none();
+        }
+
+        if self.ime_active && matches!(key, Key::Character(_)) && !modifiers.control() {
             return Task::none();
         }
 

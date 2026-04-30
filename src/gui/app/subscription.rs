@@ -57,6 +57,12 @@ impl App {
                     modifiers,
                     text: text.map(|s| s.to_string()),
                 }),
+                Event::InputMethod(input_method::Event::Opened) => {
+                    Some(Message::ImeStateChanged(true))
+                }
+                Event::InputMethod(input_method::Event::Closed) => {
+                    Some(Message::ImeStateChanged(false))
+                }
                 Event::InputMethod(input_method::Event::Commit(text)) => {
                     Some(Message::ImeCommit(text))
                 }
