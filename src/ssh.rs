@@ -1,4 +1,4 @@
-use crate::config::SshProfile;
+use crate::config::{SshAuthMethod, SshProfile};
 use crate::session::OutputEvent;
 use async_trait::async_trait;
 use iced::futures::channel::mpsc as futures_mpsc;
@@ -132,27 +132,34 @@ async fn ssh_task(
     );
 
     // Load password from OS keychain on demand (not at app startup)
-    if profile.password.is_none() && profile.identity_file.is_none() {
+    if matches!(profile.auth_method, SshAuthMethod::Password) && profile.password.is_none() {
         profile.password = crate::keychain::get_password(&profile.host, &profile.user);
     }
 
     // Auth method hint
-    if let Some(ref identity) = profile.identity_file {
-        send_status(
-            output_tx,
-            tab_id,
-            &format!(
-                "         {}  {}\r\n",
-                ansi::cyan("Using private key from"),
-                ansi::bold_underline(identity)
-            ),
-        );
-    } else if profile.password.is_some() {
-        send_status(
-            output_tx,
-            tab_id,
-            &format!("         {}\r\n", ansi::cyan("Using saved password")),
-        );
+    match profile.auth_method {
+        SshAuthMethod::KeyFile => {
+            if let Some(ref identity) = profile.identity_file {
+                send_status(
+                    output_tx,
+                    tab_id,
+                    &format!(
+                        "         {}  {}\r\n",
+                        ansi::cyan("Using private key from"),
+                        ansi::bold_underline(identity)
+                    ),
+                );
+            }
+        }
+        SshAuthMethod::Password => {
+            if profile.password.is_some() {
+                send_status(
+                    output_tx,
+                    tab_id,
+                    &format!("         {}\r\n", ansi::cyan("Using saved password")),
+                );
+            }
+        }
     }
 
     // --- TCP + SSH handshake ---
@@ -198,22 +205,33 @@ async fn ssh_task(
         profile.user.clone()
     };
 
-    let authenticated = if let Some(ref identity_path) = profile.identity_file {
-        let expanded = if identity_path.starts_with("~/") {
-            dirs::home_dir()
-                .map(|h| h.join(&identity_path[2..]).to_string_lossy().to_string())
-                .unwrap_or_else(|| identity_path.clone())
-        } else {
-            identity_path.clone()
-        };
-        let key_pair = load_secret_key(&expanded, None)?;
-        session
-            .authenticate_publickey(&user, Arc::new(key_pair))
-            .await?
-    } else if let Some(ref password) = profile.password {
-        session.authenticate_password(&user, password).await?
-    } else {
-        try_default_keys(&mut session, &user).await
+    let authenticated = match profile.auth_method {
+        SshAuthMethod::KeyFile => {
+            let Some(ref identity_path) = profile.identity_file else {
+                return Err(
+                    "Key file authentication selected but no key file is configured".into(),
+                );
+            };
+            let expanded = if identity_path.starts_with("~/") {
+                dirs::home_dir()
+                    .map(|h| h.join(&identity_path[2..]).to_string_lossy().to_string())
+                    .unwrap_or_else(|| identity_path.clone())
+            } else {
+                identity_path.clone()
+            };
+            let key_pair = load_secret_key(&expanded, None)?;
+            session
+                .authenticate_publickey(&user, Arc::new(key_pair))
+                .await?
+        }
+        SshAuthMethod::Password => {
+            let Some(ref password) = profile.password else {
+                return Err(
+                    "Password authentication selected but no password is configured".into(),
+                );
+            };
+            session.authenticate_password(&user, password).await?
+        }
     };
 
     if !authenticated {
@@ -271,33 +289,4 @@ async fn ssh_task(
     }
 
     Ok(())
-}
-
-async fn try_default_keys(session: &mut client::Handle<SshHandler>, user: &str) -> bool {
-    let home = match dirs::home_dir() {
-        Some(h) => h,
-        None => return false,
-    };
-    let candidates = [
-        home.join(".ssh/id_ed25519"),
-        home.join(".ssh/id_rsa"),
-        home.join(".ssh/id_ecdsa"),
-    ];
-    for path in &candidates {
-        if !path.exists() {
-            continue;
-        }
-        let key_pair = match load_secret_key(path, None) {
-            Ok(k) => k,
-            Err(_) => continue,
-        };
-        match session
-            .authenticate_publickey(user, Arc::new(key_pair))
-            .await
-        {
-            Ok(true) => return true,
-            _ => continue,
-        }
-    }
-    false
 }

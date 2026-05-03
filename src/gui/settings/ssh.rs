@@ -1,3 +1,4 @@
+use crate::config::SshAuthMethod;
 use crate::gui::app::Message;
 use crate::gui::components::{button_primary, button_secondary};
 use crate::gui::settings::{SettingsDraft, SshProfileDraft, SshProfileField};
@@ -130,23 +131,55 @@ fn profile_card<'a>(
         .size(11)
         .color(palette.text_secondary);
 
-    let identity_row = styled_input(
-        "Key File  (e.g. ~/.ssh/id_rsa)",
-        &profile.identity_file,
-        index,
-        SshProfileField::IdentityFile,
-        palette,
-    )
-    .width(Length::Fill);
+    let key_button = if matches!(profile.auth_method, SshAuthMethod::KeyFile) {
+        button_primary("Key File", palette)
+    } else {
+        button_secondary("Key File", palette).on_press(Message::SshProfileFieldChanged(
+            index,
+            SshProfileField::AuthMethod,
+            "key_file".into(),
+        ))
+    };
 
-    let password_row = styled_password("Password", &profile.password, index, palette);
+    let password_button = if matches!(profile.auth_method, SshAuthMethod::Password) {
+        button_primary("Password", palette)
+    } else {
+        button_secondary("Password", palette).on_press(Message::SshProfileFieldChanged(
+            index,
+            SshProfileField::AuthMethod,
+            "password".into(),
+        ))
+    };
 
-    let auth_hint = text("Password is stored securely in your OS keychain")
-        .size(10)
-        .color(Color {
-            a: 0.35,
-            ..palette.text
-        });
+    let auth_method_row = row![key_button, password_button]
+        .spacing(SPACING_SMALL)
+        .width(Length::Fill);
+
+    let auth_input: Element<'a, Message> = if matches!(profile.auth_method, SshAuthMethod::KeyFile)
+    {
+        styled_input(
+            "Key File  (e.g. ~/.ssh/id_rsa)",
+            &profile.identity_file,
+            index,
+            SshProfileField::IdentityFile,
+            palette,
+        )
+        .width(Length::Fill)
+        .into()
+    } else {
+        styled_password("Password", &profile.password, index, palette).into()
+    };
+
+    let auth_hint = text(if matches!(profile.auth_method, SshAuthMethod::Password) {
+        "Password is stored securely in your OS keychain"
+    } else {
+        "Key file path is stored in config"
+    })
+    .size(10)
+    .color(Color {
+        a: 0.35,
+        ..palette.text
+    });
 
     container(
         column![
@@ -156,8 +189,8 @@ fn profile_card<'a>(
             user_row,
             name_row,
             auth_label,
-            identity_row,
-            password_row,
+            auth_method_row,
+            auth_input,
             auth_hint,
         ]
         .spacing(8)

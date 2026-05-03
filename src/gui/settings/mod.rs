@@ -1,4 +1,4 @@
-use crate::config::{AppConfig, AppConfigUpdates, SshProfile, parse_hex_color};
+use crate::config::{AppConfig, AppConfigUpdates, SshAuthMethod, SshProfile, parse_hex_color};
 use crate::gui::app::Message;
 use crate::gui::theme::{Palette, RADIUS_NORMAL, RADIUS_SMALL, SPACING_NORMAL};
 use iced::widget::{column, container, row, rule, text, text_input, toggler};
@@ -53,6 +53,7 @@ pub enum SshProfileField {
     Host,
     Port,
     User,
+    AuthMethod,
     IdentityFile,
     Password,
 }
@@ -102,6 +103,7 @@ pub struct SshProfileDraft {
     pub host: String,
     pub port: String,
     pub user: String,
+    pub auth_method: SshAuthMethod,
     pub identity_file: String,
     pub password: String,
 }
@@ -113,6 +115,7 @@ impl SshProfileDraft {
             host: profile.host.clone(),
             port: profile.port.to_string(),
             user: profile.user.clone(),
+            auth_method: profile.auth_method,
             identity_file: profile.identity_file.clone().unwrap_or_default(),
             password: profile.password.clone().unwrap_or_default(),
         }
@@ -128,21 +131,26 @@ impl SshProfileDraft {
             host: host.to_string(),
             port: self.port.trim().parse().unwrap_or(22),
             user: self.user.trim().to_string(),
-            identity_file: {
+            auth_method: self.auth_method,
+            identity_file: if matches!(self.auth_method, SshAuthMethod::KeyFile) {
                 let v = self.identity_file.trim();
                 if v.is_empty() {
                     None
                 } else {
                     Some(v.to_string())
                 }
+            } else {
+                None
             },
-            password: {
+            password: if matches!(self.auth_method, SshAuthMethod::Password) {
                 let v = self.password.trim();
                 if v.is_empty() {
                     None
                 } else {
                     Some(v.to_string())
                 }
+            } else {
+                None
             },
         })
     }
@@ -221,6 +229,13 @@ impl SettingsDraft {
                 SshProfileField::Host => draft.host = value,
                 SshProfileField::Port => draft.port = value,
                 SshProfileField::User => draft.user = value,
+                SshProfileField::AuthMethod => {
+                    draft.auth_method = match value.as_str() {
+                        "key_file" => SshAuthMethod::KeyFile,
+                        "password" => SshAuthMethod::Password,
+                        _ => draft.auth_method,
+                    };
+                }
                 SshProfileField::IdentityFile => draft.identity_file = value,
                 SshProfileField::Password => draft.password = value,
             }
@@ -611,7 +626,7 @@ pub fn format_rgb(rgb: [u8; 3]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::SshProfile;
+    use crate::config::{SshAuthMethod, SshProfile};
 
     #[test]
     fn ssh_draft_roundtrip_with_password() {
@@ -620,6 +635,7 @@ mod tests {
             host: "10.0.0.1".into(),
             port: 2222,
             user: "deploy".into(),
+            auth_method: SshAuthMethod::Password,
             identity_file: Some("~/.ssh/id_rsa".into()),
             password: Some("s3cret".into()),
         };
@@ -629,12 +645,34 @@ mod tests {
         assert_eq!(draft.host, "10.0.0.1");
         assert_eq!(draft.port, "2222");
         assert_eq!(draft.user, "deploy");
+        assert_eq!(draft.auth_method, SshAuthMethod::Password);
         assert_eq!(draft.identity_file, "~/.ssh/id_rsa");
         assert_eq!(draft.password, "s3cret");
 
         let back = draft.to_profile().unwrap();
+        assert_eq!(back.auth_method, SshAuthMethod::Password);
+        assert!(back.identity_file.is_none());
         assert_eq!(back.password.as_deref(), Some("s3cret"));
         assert_eq!(back.port, 2222);
+    }
+
+    #[test]
+    fn ssh_draft_key_file_auth_ignores_password() {
+        let draft = SshProfileDraft {
+            name: "test".into(),
+            host: "host".into(),
+            port: "22".into(),
+            user: "me".into(),
+            auth_method: SshAuthMethod::KeyFile,
+            identity_file: "~/.ssh/id_ed25519".into(),
+            password: "saved-password".into(),
+        };
+
+        let profile = draft.to_profile().unwrap();
+
+        assert_eq!(profile.auth_method, SshAuthMethod::KeyFile);
+        assert_eq!(profile.identity_file.as_deref(), Some("~/.ssh/id_ed25519"));
+        assert!(profile.password.is_none());
     }
 
     #[test]
@@ -644,6 +682,7 @@ mod tests {
             host: "host".into(),
             port: "22".into(),
             user: "".into(),
+            auth_method: SshAuthMethod::Password,
             identity_file: "".into(),
             password: "  ".into(),
         };
@@ -659,6 +698,7 @@ mod tests {
             host: "  ".into(),
             port: "22".into(),
             user: "".into(),
+            auth_method: SshAuthMethod::Password,
             identity_file: "".into(),
             password: "pass".into(),
         };
@@ -673,6 +713,7 @@ mod tests {
                 host: "h".into(),
                 port: 22,
                 user: "u".into(),
+                auth_method: SshAuthMethod::Password,
                 identity_file: None,
                 password: None,
             }],

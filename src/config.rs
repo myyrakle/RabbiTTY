@@ -63,12 +63,26 @@ pub const DEFAULT_TERMINAL_PADDING_X: f32 = 4.0;
 pub const DEFAULT_TERMINAL_PADDING_Y: f32 = 4.0;
 const DEJAVU_SANS_MONO: &[u8] = include_bytes!("../fonts/DejaVuSansMono.ttf");
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SshAuthMethod {
+    KeyFile,
+    Password,
+}
+
+impl Default for SshAuthMethod {
+    fn default() -> Self {
+        Self::Password
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SshProfile {
     pub name: String,
     pub host: String,
     pub port: u16,
     pub user: String,
+    pub auth_method: SshAuthMethod,
     pub identity_file: Option<String>,
     pub password: Option<String>,
 }
@@ -80,6 +94,7 @@ impl Default for SshProfile {
             host: String::new(),
             port: 22,
             user: String::new(),
+            auth_method: SshAuthMethod::Password,
             identity_file: None,
             password: None,
         }
@@ -142,6 +157,7 @@ struct SshProfileFileConfig {
     host: Option<String>,
     port: Option<u16>,
     user: Option<String>,
+    auth_method: Option<SshAuthMethod>,
     identity_file: Option<String>,
 }
 
@@ -508,6 +524,20 @@ impl AppConfig {
                     if host.is_empty() {
                         return None;
                     }
+                    let identity_file = p
+                        .identity_file
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(String::from);
+                    let auth_method = p.auth_method.unwrap_or_else(|| {
+                        if identity_file.is_some() {
+                            SshAuthMethod::KeyFile
+                        } else {
+                            SshAuthMethod::Password
+                        }
+                    });
+
                     Some(SshProfile {
                         name: p
                             .name
@@ -519,12 +549,12 @@ impl AppConfig {
                         host: host.to_string(),
                         port: p.port.unwrap_or(22),
                         user: p.user.as_deref().map(str::trim).unwrap_or("").to_string(),
-                        identity_file: p
-                            .identity_file
-                            .as_deref()
-                            .map(str::trim)
-                            .filter(|s| !s.is_empty())
-                            .map(String::from),
+                        auth_method,
+                        identity_file: if matches!(auth_method, SshAuthMethod::KeyFile) {
+                            identity_file
+                        } else {
+                            None
+                        },
                         password: None,
                     })
                 })
@@ -765,7 +795,12 @@ impl From<&AppConfig> for FileConfig {
                             } else {
                                 Some(p.user.clone())
                             },
-                            identity_file: p.identity_file.clone(),
+                            auth_method: Some(p.auth_method),
+                            identity_file: if matches!(p.auth_method, SshAuthMethod::KeyFile) {
+                                p.identity_file.clone()
+                            } else {
+                                None
+                            },
                         })
                         .collect(),
                 )
@@ -1015,13 +1050,43 @@ mod tests {
         assert_eq!(p0.host, "example.com");
         assert_eq!(p0.port, 2222);
         assert_eq!(p0.user, "admin");
+        assert_eq!(p0.auth_method, SshAuthMethod::KeyFile);
         assert_eq!(p0.identity_file.as_deref(), Some("~/.ssh/id_ed25519"));
         assert!(p0.password.is_none()); // password is never in config file
 
         let p1 = &config.ssh_profiles[1];
         assert_eq!(p1.name, "bare.host"); // name defaults to host
         assert_eq!(p1.port, 22); // default port
+        assert_eq!(p1.auth_method, SshAuthMethod::Password);
         assert!(p1.user.is_empty());
+    }
+
+    #[test]
+    fn ssh_profile_auth_method_parsed_and_serialized() {
+        let mut config = AppConfig::default();
+        let file = toml::from_str::<FileConfig>(
+            r#"
+            [[ssh_profiles]]
+            host = "key.host"
+            auth_method = "key_file"
+            identity_file = "~/.ssh/key"
+
+            [[ssh_profiles]]
+            host = "password.host"
+            auth_method = "password"
+            identity_file = "~/.ssh/ignored"
+            "#,
+        )
+        .expect("file config should parse");
+
+        config.apply_file(file);
+
+        assert_eq!(config.ssh_profiles[0].auth_method, SshAuthMethod::KeyFile);
+        assert_eq!(config.ssh_profiles[1].auth_method, SshAuthMethod::Password);
+
+        let serialized = toml::to_string_pretty(&FileConfig::from(&config)).unwrap();
+        assert!(serialized.contains("auth_method = \"key_file\""));
+        assert!(serialized.contains("auth_method = \"password\""));
     }
 
     #[test]
@@ -1048,6 +1113,7 @@ mod tests {
                 host: "host.com".into(),
                 port: 22,
                 user: "user".into(),
+                auth_method: SshAuthMethod::Password,
                 identity_file: None,
                 password: Some("secret123".into()),
             }],
@@ -1057,7 +1123,7 @@ mod tests {
         let file = FileConfig::from(&config);
         let toml_str = toml::to_string_pretty(&file).unwrap();
         assert!(!toml_str.contains("secret123"));
-        assert!(!toml_str.contains("password"));
+        assert!(!toml_str.contains("password ="));
     }
 
     #[test]

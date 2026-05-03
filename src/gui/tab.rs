@@ -478,6 +478,7 @@ mod tests {
             host: "prod.example.com".into(),
             port: 22,
             user: "deploy".into(),
+            auth_method: crate::config::SshAuthMethod::Password,
             identity_file: None,
             password: None,
         };
@@ -488,6 +489,7 @@ mod tests {
             host: "dev.example.com".into(),
             port: 22,
             user: "user".into(),
+            auth_method: crate::config::SshAuthMethod::Password,
             identity_file: None,
             password: None,
         };
@@ -498,6 +500,7 @@ mod tests {
             host: "bare.host".into(),
             port: 22,
             user: String::new(),
+            auth_method: crate::config::SshAuthMethod::Password,
             identity_file: None,
             password: None,
         };
