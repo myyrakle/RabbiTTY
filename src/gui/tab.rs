@@ -481,6 +481,7 @@ mod tests {
             auth_method: crate::config::SshAuthMethod::Password,
             identity_file: None,
             password: None,
+            proxy_command: None,
         };
         assert_eq!(with_name.tab_title(), "Production");
 
@@ -492,6 +493,7 @@ mod tests {
             auth_method: crate::config::SshAuthMethod::Password,
             identity_file: None,
             password: None,
+            proxy_command: None,
         };
         assert_eq!(no_name.tab_title(), "user@dev.example.com");
 
@@ -503,6 +505,7 @@ mod tests {
             auth_method: crate::config::SshAuthMethod::Password,
             identity_file: None,
             password: None,
+            proxy_command: None,
         };
         assert_eq!(no_name_no_user.tab_title(), "bare.host");
     }

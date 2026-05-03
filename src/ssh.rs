@@ -5,7 +5,12 @@ use iced::futures::channel::mpsc as futures_mpsc;
 use russh::keys::*;
 use russh::*;
 use std::io::Write;
+use std::pin::Pin;
+use std::process::Stdio;
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::mpsc as tokio_mpsc;
 
 use crate::ansi;
@@ -53,6 +58,46 @@ impl Write for SshWriter {
 
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
+    }
+}
+
+struct ProxyCommandStream {
+    child: Child,
+    stdout: ChildStdout,
+    stdin: ChildStdin,
+}
+
+impl AsyncRead for ProxyCommandStream {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.stdout).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for ProxyCommandStream {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.stdin).poll_write(cx, buf)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.stdin).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.stdin).poll_shutdown(cx)
+    }
+}
+
+impl Drop for ProxyCommandStream {
+    fn drop(&mut self) {
+        let _ = self.child.start_kill();
     }
 }
 
@@ -173,8 +218,18 @@ async fn ssh_task(
         fingerprint_tx: Some(fp_tx),
     };
 
-    let addr = format!("{}:{}", profile.host, profile.port);
-    let mut session = client::connect(config, &*addr, handler).await?;
+    let mut session = if let Some(ref proxy_command) = profile.proxy_command {
+        send_status(
+            output_tx,
+            tab_id,
+            &format!("         {}\r\n", ansi::cyan("Using ProxyCommand")),
+        );
+        let stream = spawn_proxy_command(proxy_command, &profile.host, profile.port)?;
+        client::connect_stream(config, stream, handler).await?
+    } else {
+        let addr = format!("{}:{}", profile.host, profile.port);
+        client::connect(config, &*addr, handler).await?
+    };
 
     // Display host key fingerprint
     if let Ok(fp) = fp_rx.await {
@@ -289,4 +344,65 @@ async fn ssh_task(
     }
 
     Ok(())
+}
+
+fn expand_proxy_command(command: &str, host: &str, port: u16) -> String {
+    command.replace("%h", host).replace("%p", &port.to_string())
+}
+
+fn spawn_proxy_command(
+    command: &str,
+    host: &str,
+    port: u16,
+) -> Result<ProxyCommandStream, Box<dyn std::error::Error + Send + Sync>> {
+    let command = expand_proxy_command(command, host, port);
+
+    #[cfg(target_os = "windows")]
+    let mut child = Command::new("cmd")
+        .arg("/C")
+        .arg(&command)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()?;
+
+    #[cfg(not(target_os = "windows"))]
+    let mut child = Command::new("sh")
+        .arg("-c")
+        .arg(&command)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()?;
+
+    let stdin = child.stdin.take().ok_or("ProxyCommand stdin unavailable")?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or("ProxyCommand stdout unavailable")?;
+
+    Ok(ProxyCommandStream {
+        child,
+        stdout,
+        stdin,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proxy_command_replaces_host_and_port_tokens() {
+        let command = expand_proxy_command(
+            "cloudflared access ssh --hostname %h --url localhost:%p",
+            "myyrakle-remote.chainshift.co",
+            2222,
+        );
+
+        assert_eq!(
+            command,
+            "cloudflared access ssh --hostname myyrakle-remote.chainshift.co --url localhost:2222"
+        );
+    }
 }

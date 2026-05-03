@@ -63,17 +63,12 @@ pub const DEFAULT_TERMINAL_PADDING_X: f32 = 4.0;
 pub const DEFAULT_TERMINAL_PADDING_Y: f32 = 4.0;
 const DEJAVU_SANS_MONO: &[u8] = include_bytes!("../fonts/DejaVuSansMono.ttf");
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SshAuthMethod {
     KeyFile,
+    #[default]
     Password,
-}
-
-impl Default for SshAuthMethod {
-    fn default() -> Self {
-        Self::Password
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +80,7 @@ pub struct SshProfile {
     pub auth_method: SshAuthMethod,
     pub identity_file: Option<String>,
     pub password: Option<String>,
+    pub proxy_command: Option<String>,
 }
 
 impl Default for SshProfile {
@@ -97,6 +93,7 @@ impl Default for SshProfile {
             auth_method: SshAuthMethod::Password,
             identity_file: None,
             password: None,
+            proxy_command: None,
         }
     }
 }
@@ -159,6 +156,7 @@ struct SshProfileFileConfig {
     user: Option<String>,
     auth_method: Option<SshAuthMethod>,
     identity_file: Option<String>,
+    proxy_command: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -556,6 +554,12 @@ impl AppConfig {
                             None
                         },
                         password: None,
+                        proxy_command: p
+                            .proxy_command
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .map(String::from),
                     })
                 })
                 .collect();
@@ -786,6 +790,7 @@ impl From<&AppConfig> for FileConfig {
                     config
                         .ssh_profiles
                         .iter()
+                        .filter(|p| !p.host.trim().is_empty())
                         .map(|p| SshProfileFileConfig {
                             name: Some(p.name.clone()),
                             host: Some(p.host.clone()),
@@ -801,6 +806,7 @@ impl From<&AppConfig> for FileConfig {
                             } else {
                                 None
                             },
+                            proxy_command: p.proxy_command.clone(),
                         })
                         .collect(),
                 )
@@ -1090,6 +1096,30 @@ mod tests {
     }
 
     #[test]
+    fn ssh_profile_proxy_command_parsed_and_serialized() {
+        let mut config = AppConfig::default();
+        let file = toml::from_str::<FileConfig>(
+            r#"
+            [[ssh_profiles]]
+            host = "remote.example.com"
+            proxy_command = "cloudflared access ssh --hostname %h"
+            "#,
+        )
+        .expect("file config should parse");
+
+        config.apply_file(file);
+
+        let profile = &config.ssh_profiles[0];
+        assert_eq!(
+            profile.proxy_command.as_deref(),
+            Some("cloudflared access ssh --hostname %h")
+        );
+
+        let serialized = toml::to_string_pretty(&FileConfig::from(&config)).unwrap();
+        assert!(serialized.contains("proxy_command = \"cloudflared access ssh --hostname %h\""));
+    }
+
+    #[test]
     fn ssh_profile_skips_empty_host() {
         let mut config = AppConfig::default();
         let file = toml::from_str::<FileConfig>(
@@ -1116,6 +1146,7 @@ mod tests {
                 auth_method: SshAuthMethod::Password,
                 identity_file: None,
                 password: Some("secret123".into()),
+                proxy_command: None,
             }],
             ..Default::default()
         };
@@ -1124,6 +1155,28 @@ mod tests {
         let toml_str = toml::to_string_pretty(&file).unwrap();
         assert!(!toml_str.contains("secret123"));
         assert!(!toml_str.contains("password ="));
+    }
+
+    #[test]
+    fn ssh_profile_serialization_skips_empty_host_profiles() {
+        let config = AppConfig {
+            ssh_profiles: vec![SshProfile {
+                name: "".into(),
+                host: "".into(),
+                port: 22,
+                user: "".into(),
+                auth_method: SshAuthMethod::Password,
+                identity_file: None,
+                password: None,
+                proxy_command: None,
+            }],
+            ..Default::default()
+        };
+
+        let file = FileConfig::from(&config);
+        let toml_str = toml::to_string_pretty(&file).unwrap();
+
+        assert!(!toml_str.contains("[[ssh_profiles]]"));
     }
 
     #[test]

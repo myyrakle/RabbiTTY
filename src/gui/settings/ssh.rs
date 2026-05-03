@@ -17,6 +17,33 @@ pub fn view(draft: &SettingsDraft, palette: Palette) -> Element<'_, Message> {
         items.push(empty_state(palette));
     }
 
+    if let Some(error) = &draft.ssh_profiles_error {
+        items.push(
+            container(text(error).size(12).color(Color {
+                a: 0.95,
+                ..palette.error
+            }))
+            .padding([8, 10])
+            .width(Length::Fill)
+            .style(move |_theme: &iced::Theme| iced::widget::container::Style {
+                background: Some(Background::Color(Color {
+                    a: 0.08,
+                    ..palette.error
+                })),
+                border: Border {
+                    radius: RADIUS_SMALL.into(),
+                    width: 1.0,
+                    color: Color {
+                        a: 0.25,
+                        ..palette.error
+                    },
+                },
+                ..Default::default()
+            })
+            .into(),
+        );
+    }
+
     items.push(
         row![
             button_primary("+ Add Profile", palette).on_press(Message::AddSshProfile),
@@ -181,6 +208,24 @@ fn profile_card<'a>(
         ..palette.text
     });
 
+    let proxy_label = text("Proxy Command").size(11).color(palette.text_secondary);
+
+    let proxy_row = styled_input(
+        "ProxyCommand  (e.g. cloudflared access ssh --hostname %h)",
+        &profile.proxy_command,
+        index,
+        SshProfileField::ProxyCommand,
+        palette,
+    )
+    .width(Length::Fill);
+
+    let proxy_hint = text("%h and %p are replaced with host and port")
+        .size(10)
+        .color(Color {
+            a: 0.35,
+            ..palette.text
+        });
+
     container(
         column![
             title_row,
@@ -192,6 +237,9 @@ fn profile_card<'a>(
             auth_method_row,
             auth_input,
             auth_hint,
+            proxy_label,
+            proxy_row,
+            proxy_hint,
         ]
         .spacing(8)
         .width(Length::Fill),
