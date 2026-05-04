@@ -15,6 +15,12 @@ pub fn modal_overlay<'a>(
     draft: &'a SettingsDraft,
     palette: Palette,
 ) -> Element<'a, Message> {
+    if let Some(index) = draft.ssh_profile_delete_pending
+        && let Some(profile) = draft.ssh_profiles.get(index)
+    {
+        return delete_confirm_overlay(base, profile, palette);
+    }
+
     if let Some(mode) = draft.ssh_profile_modal_mode {
         return modal_overlay_content(
             base,
@@ -26,6 +32,57 @@ pub fn modal_overlay<'a>(
     }
 
     base
+}
+
+fn delete_confirm_overlay<'a>(
+    base: Element<'a, Message>,
+    profile: &'a SshProfileDraft,
+    palette: Palette,
+) -> Element<'a, Message> {
+    let backdrop = mouse_area(backdrop(palette)).on_press(Message::CancelRemoveSshProfile);
+    let title = profile_title(profile);
+    let description = format!("Delete \"{title}\" from SSH profiles?");
+
+    let modal = container(
+        column![
+            text("Delete SSH Profile").size(16).color(palette.text),
+            text(description).size(13).color(palette.text_secondary),
+            row![
+                container("").width(Length::Fill),
+                button_secondary("Cancel", palette).on_press(Message::CancelRemoveSshProfile),
+                button_primary("Delete", palette).on_press(Message::ConfirmRemoveSshProfile),
+            ]
+            .spacing(SPACING_SMALL)
+            .align_y(Alignment::Center)
+            .width(Length::Fill),
+        ]
+        .spacing(SPACING_NORMAL)
+        .padding(20)
+        .width(Length::Fixed(360.0)),
+    )
+    .style(move |_theme: &iced::Theme| container::Style {
+        background: Some(Background::Color(palette.surface)),
+        border: Border {
+            radius: RADIUS_NORMAL.into(),
+            width: 1.0,
+            color: Color {
+                a: 0.16,
+                ..palette.text
+            },
+        },
+        ..Default::default()
+    });
+
+    let modal_layer = mouse_area(modal).on_press(Message::Noop);
+
+    stack![
+        base,
+        backdrop,
+        center(modal_layer).width(Length::Fill).height(Length::Fill)
+    ]
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
 }
 
 fn content(draft: &SettingsDraft, palette: Palette) -> Element<'_, Message> {
@@ -102,7 +159,7 @@ fn profile_row<'a>(
             .width(Length::Fill),
             row![
                 icon_button("\u{270e}", palette).on_press(Message::EditSshProfile(index)),
-                icon_button("\u{1f5d1}", palette).on_press(Message::RemoveSshProfile(index)),
+                icon_button("\u{1f5d1}", palette).on_press(Message::RequestRemoveSshProfile(index)),
             ]
             .spacing(6)
             .align_y(Alignment::Center),
@@ -182,21 +239,7 @@ fn modal_overlay_content<'a>(
     error: Option<&'a str>,
     palette: Palette,
 ) -> Element<'a, Message> {
-    let backdrop = mouse_area(
-        container(text(""))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(|_theme: &iced::Theme| container::Style {
-                background: Some(Background::Color(Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 0.50,
-                })),
-                ..Default::default()
-            }),
-    )
-    .on_press(Message::CloseSshProfileModal);
+    let backdrop = mouse_area(backdrop(palette)).on_press(Message::CloseSshProfileModal);
 
     let title = match mode {
         SshProfileModalMode::Create => "Create SSH Profile",
@@ -259,6 +302,21 @@ fn modal_overlay_content<'a>(
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
+}
+
+fn backdrop(palette: Palette) -> container::Container<'static, Message> {
+    container(text(""))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(move |_theme: &iced::Theme| container::Style {
+            background: Some(Background::Color(Color {
+                r: palette.background.r,
+                g: palette.background.g,
+                b: palette.background.b,
+                a: 0.50,
+            })),
+            ..Default::default()
+        })
 }
 
 fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'a, Message> {

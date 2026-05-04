@@ -116,17 +116,17 @@ impl App {
             Message::EditSshProfile(index) => {
                 self.settings_draft.open_edit_ssh_profile_modal(index);
             }
-            Message::RemoveSshProfile(index) => {
-                let removed_identity = self
-                    .settings_draft
-                    .ssh_profiles
-                    .get(index)
-                    .map(|profile| (profile.host.clone(), profile.user.clone()));
-                self.settings_draft.remove_ssh_profile(index);
-                if let Some((host, user)) = removed_identity {
+            Message::RequestRemoveSshProfile(index) => {
+                self.settings_draft.request_delete_ssh_profile(index);
+            }
+            Message::CancelRemoveSshProfile => {
+                self.settings_draft.cancel_delete_ssh_profile();
+            }
+            Message::ConfirmRemoveSshProfile => {
+                if let Some((host, user)) = self.settings_draft.confirm_delete_ssh_profile() {
                     crate::keychain::delete_password(&host, &user);
+                    self.save_ssh_profiles();
                 }
-                self.save_ssh_profiles();
             }
             Message::SshProfileModalFieldChanged(field, value) => {
                 self.settings_draft.update_ssh_profile_modal(field, value);

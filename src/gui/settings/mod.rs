@@ -214,6 +214,7 @@ pub struct SettingsDraft {
     pub ssh_profiles_error: Option<String>,
     pub ssh_profile_modal_mode: Option<SshProfileModalMode>,
     pub ssh_profile_modal_draft: SshProfileDraft,
+    pub ssh_profile_delete_pending: Option<usize>,
 }
 
 impl SettingsDraft {
@@ -246,6 +247,7 @@ impl SettingsDraft {
             ssh_profiles_error: None,
             ssh_profile_modal_mode: None,
             ssh_profile_modal_draft: SshProfileDraft::default(),
+            ssh_profile_delete_pending: None,
         }
     }
 
@@ -275,11 +277,25 @@ impl SettingsDraft {
         self.ssh_profiles.push(SshProfileDraft::default());
     }
 
-    pub fn remove_ssh_profile(&mut self, index: usize) {
+    pub fn request_delete_ssh_profile(&mut self, index: usize) {
+        if index < self.ssh_profiles.len() {
+            self.ssh_profiles_error = None;
+            self.ssh_profile_delete_pending = Some(index);
+        }
+    }
+
+    pub fn cancel_delete_ssh_profile(&mut self) {
+        self.ssh_profile_delete_pending = None;
+    }
+
+    pub fn confirm_delete_ssh_profile(&mut self) -> Option<(String, String)> {
+        let index = self.ssh_profile_delete_pending.take()?;
         self.ssh_profiles_error = None;
         if index < self.ssh_profiles.len() {
-            self.ssh_profiles.remove(index);
+            let profile = self.ssh_profiles.remove(index);
+            return Some((profile.host, profile.user));
         }
+        None
     }
 
     pub fn open_create_ssh_profile_modal(&mut self) {
@@ -941,6 +957,76 @@ mod tests {
         assert_eq!(err, "SSH profile needs a Host before saving.");
         assert!(draft.ssh_profiles.is_empty());
         assert!(draft.ssh_profile_modal_mode.is_some());
+    }
+
+    #[test]
+    fn ssh_profile_delete_requires_confirmation() {
+        let mut draft = SettingsDraft::from_config(&crate::config::AppConfig {
+            ssh_profiles: vec![
+                SshProfile {
+                    name: "prod".into(),
+                    host: "prod.example.com".into(),
+                    port: 22,
+                    user: "deploy".into(),
+                    auth_method: SshAuthMethod::Password,
+                    identity_file: None,
+                    password: Some("secret".into()),
+                    proxy_command: None,
+                },
+                SshProfile {
+                    name: "stage".into(),
+                    host: "stage.example.com".into(),
+                    port: 22,
+                    user: "deploy".into(),
+                    auth_method: SshAuthMethod::KeyFile,
+                    identity_file: Some("~/.ssh/id_ed25519".into()),
+                    password: None,
+                    proxy_command: None,
+                },
+            ],
+            ..Default::default()
+        });
+
+        draft.request_delete_ssh_profile(0);
+
+        assert_eq!(draft.ssh_profile_delete_pending, Some(0));
+        assert_eq!(draft.ssh_profiles.len(), 2);
+
+        let removed = draft.confirm_delete_ssh_profile();
+
+        assert_eq!(
+            removed
+                .as_ref()
+                .map(|(host, user)| (host.as_str(), user.as_str())),
+            Some(("prod.example.com", "deploy"))
+        );
+        assert_eq!(draft.ssh_profiles.len(), 1);
+        assert_eq!(draft.ssh_profiles[0].host, "stage.example.com");
+        assert!(draft.ssh_profile_delete_pending.is_none());
+    }
+
+    #[test]
+    fn ssh_profile_delete_cancel_leaves_profile_unchanged() {
+        let mut draft = SettingsDraft::from_config(&crate::config::AppConfig {
+            ssh_profiles: vec![SshProfile {
+                name: "prod".into(),
+                host: "prod.example.com".into(),
+                port: 22,
+                user: "deploy".into(),
+                auth_method: SshAuthMethod::Password,
+                identity_file: None,
+                password: Some("secret".into()),
+                proxy_command: None,
+            }],
+            ..Default::default()
+        });
+
+        draft.request_delete_ssh_profile(0);
+        draft.cancel_delete_ssh_profile();
+
+        assert_eq!(draft.ssh_profiles.len(), 1);
+        assert_eq!(draft.ssh_profiles[0].host, "prod.example.com");
+        assert!(draft.ssh_profile_delete_pending.is_none());
     }
 
     #[test]
