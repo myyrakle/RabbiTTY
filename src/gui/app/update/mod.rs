@@ -16,8 +16,44 @@ pub(in crate::gui) static TERMINAL_SCROLLABLE_ID: LazyLock<widget::Id> =
     LazyLock::new(widget::Id::unique);
 
 impl App {
+    fn save_ssh_profiles(&mut self) {
+        self.settings_draft
+            .load_ssh_passwords_from_keychain(&self.config.ssh_profiles);
+        if let Err(err) = self
+            .settings_draft
+            .apply_ssh_profiles_to(&mut self.config.ssh_profiles)
+        {
+            eprintln!("Failed to save SSH profiles: {err}");
+            return;
+        }
+
+        for profile in &self.config.ssh_profiles {
+            if let Some(ref pw) = profile.password {
+                crate::keychain::set_password(&profile.host, &profile.user, pw);
+            } else {
+                crate::keychain::delete_password(&profile.host, &profile.user);
+            }
+        }
+
+        match self.config.save() {
+            Ok(()) => {
+                self.settings_draft = SettingsDraft::from_config(&self.config);
+                self.settings_draft
+                    .load_ssh_passwords_from_keychain(&self.config.ssh_profiles);
+                self.settings_draft.set_ssh_profiles_saved();
+            }
+            Err(err) => {
+                let message = format!("Failed to save SSH profiles: {err}");
+                eprintln!("{message}");
+                self.settings_draft.set_ssh_profiles_error(message);
+            }
+        }
+    }
+
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::Noop => {}
+
             // ── Tab management ──────────────────────────────────────
             Message::TabSelected(index) => {
                 if index == SETTINGS_TAB_INDEX && self.settings_open {
@@ -75,44 +111,33 @@ impl App {
 
             // ── Settings ────────────────────────────────────────────
             Message::AddSshProfile => {
-                self.settings_draft.add_ssh_profile();
+                self.settings_draft.open_create_ssh_profile_modal();
+            }
+            Message::EditSshProfile(index) => {
+                self.settings_draft.open_edit_ssh_profile_modal(index);
             }
             Message::RemoveSshProfile(index) => {
-                self.settings_draft.remove_ssh_profile(index);
-            }
-            Message::SshProfileFieldChanged(index, field, value) => {
-                self.settings_draft.update_ssh_profile(index, field, value);
-            }
-            Message::SaveSshProfiles => {
-                self.settings_draft
-                    .load_ssh_passwords_from_keychain(&self.config.ssh_profiles);
-                if let Err(err) = self
+                let removed_identity = self
                     .settings_draft
-                    .apply_ssh_profiles_to(&mut self.config.ssh_profiles)
-                {
-                    eprintln!("Failed to save SSH profiles: {err}");
-                    return Task::none();
+                    .ssh_profiles
+                    .get(index)
+                    .map(|profile| (profile.host.clone(), profile.user.clone()));
+                self.settings_draft.remove_ssh_profile(index);
+                if let Some((host, user)) = removed_identity {
+                    crate::keychain::delete_password(&host, &user);
                 }
-                // Save passwords to OS keychain (not in config file)
-                for profile in &self.config.ssh_profiles {
-                    if let Some(ref pw) = profile.password {
-                        crate::keychain::set_password(&profile.host, &profile.user, pw);
-                    } else {
-                        crate::keychain::delete_password(&profile.host, &profile.user);
-                    }
-                }
-                match self.config.save() {
-                    Ok(()) => {
-                        self.settings_draft = SettingsDraft::from_config(&self.config);
-                        self.settings_draft.set_ssh_profiles_saved();
-                    }
-                    Err(err) => {
-                        let message = format!("Failed to save SSH profiles: {err}");
-                        eprintln!("{message}");
-                        self.settings_draft.set_ssh_profiles_error(message);
-                    }
-                }
+                self.save_ssh_profiles();
             }
+            Message::SshProfileModalFieldChanged(field, value) => {
+                self.settings_draft.update_ssh_profile_modal(field, value);
+            }
+            Message::CloseSshProfileModal => {
+                self.settings_draft.close_ssh_profile_modal();
+            }
+            Message::SaveSshProfileModal => match self.settings_draft.save_ssh_profile_modal() {
+                Ok(()) => self.save_ssh_profiles(),
+                Err(err) => eprintln!("Failed to update SSH profile draft: {err}"),
+            },
             Message::OpenSettingsTab => {
                 self.settings_open = true;
                 self.active_tab = SETTINGS_TAB_INDEX;

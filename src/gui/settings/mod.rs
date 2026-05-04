@@ -110,6 +110,12 @@ pub struct SshProfileDraft {
     pub proxy_command: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SshProfileModalMode {
+    Create,
+    Edit(usize),
+}
+
 impl Default for SshProfileDraft {
     fn default() -> Self {
         Self::from_profile(&SshProfile::default())
@@ -206,6 +212,8 @@ pub struct SettingsDraft {
     pub shortcut_quit: String,
     pub ssh_profiles: Vec<SshProfileDraft>,
     pub ssh_profiles_error: Option<String>,
+    pub ssh_profile_modal_mode: Option<SshProfileModalMode>,
+    pub ssh_profile_modal_draft: SshProfileDraft,
 }
 
 impl SettingsDraft {
@@ -236,6 +244,8 @@ impl SettingsDraft {
                 .map(SshProfileDraft::from_profile)
                 .collect(),
             ssh_profiles_error: None,
+            ssh_profile_modal_mode: None,
+            ssh_profile_modal_draft: SshProfileDraft::default(),
         }
     }
 
@@ -251,28 +261,15 @@ impl SettingsDraft {
         }
     }
 
+    #[cfg(test)]
     pub fn update_ssh_profile(&mut self, index: usize, field: SshProfileField, value: String) {
         self.ssh_profiles_error = None;
         if let Some(draft) = self.ssh_profiles.get_mut(index) {
-            match field {
-                SshProfileField::Name => draft.name = value,
-                SshProfileField::Host => draft.host = value,
-                SshProfileField::Port => draft.port = value,
-                SshProfileField::User => draft.user = value,
-                SshProfileField::AuthMethod => {
-                    draft.auth_method = match value.as_str() {
-                        "key_file" => SshAuthMethod::KeyFile,
-                        "password" => SshAuthMethod::Password,
-                        _ => draft.auth_method,
-                    };
-                }
-                SshProfileField::IdentityFile => draft.identity_file = value,
-                SshProfileField::Password => draft.password = value,
-                SshProfileField::ProxyCommand => draft.proxy_command = value,
-            }
+            update_ssh_profile_draft(draft, field, value);
         }
     }
 
+    #[cfg(test)]
     pub fn add_ssh_profile(&mut self) {
         self.ssh_profiles_error = None;
         self.ssh_profiles.push(SshProfileDraft::default());
@@ -283,6 +280,57 @@ impl SettingsDraft {
         if index < self.ssh_profiles.len() {
             self.ssh_profiles.remove(index);
         }
+    }
+
+    pub fn open_create_ssh_profile_modal(&mut self) {
+        self.ssh_profiles_error = None;
+        self.ssh_profile_modal_mode = Some(SshProfileModalMode::Create);
+        self.ssh_profile_modal_draft = SshProfileDraft::default();
+    }
+
+    pub fn open_edit_ssh_profile_modal(&mut self, index: usize) {
+        if let Some(profile) = self.ssh_profiles.get(index) {
+            self.ssh_profiles_error = None;
+            self.ssh_profile_modal_mode = Some(SshProfileModalMode::Edit(index));
+            self.ssh_profile_modal_draft = profile.clone();
+        }
+    }
+
+    pub fn close_ssh_profile_modal(&mut self) {
+        self.ssh_profile_modal_mode = None;
+        self.ssh_profile_modal_draft = SshProfileDraft::default();
+    }
+
+    pub fn update_ssh_profile_modal(&mut self, field: SshProfileField, value: String) {
+        self.ssh_profiles_error = None;
+        update_ssh_profile_draft(&mut self.ssh_profile_modal_draft, field, value);
+    }
+
+    pub fn save_ssh_profile_modal(&mut self) -> Result<(), String> {
+        if self.ssh_profile_modal_mode.is_none() {
+            return Ok(());
+        }
+        if self.ssh_profile_modal_draft.to_profile().is_none() {
+            let message = "SSH profile needs a Host before saving.".to_string();
+            self.ssh_profiles_error = Some(message.clone());
+            return Err(message);
+        }
+
+        match self.ssh_profile_modal_mode {
+            Some(SshProfileModalMode::Create) => {
+                self.ssh_profiles.push(self.ssh_profile_modal_draft.clone());
+            }
+            Some(SshProfileModalMode::Edit(index)) => {
+                if let Some(profile) = self.ssh_profiles.get_mut(index) {
+                    *profile = self.ssh_profile_modal_draft.clone();
+                }
+            }
+            None => {}
+        }
+
+        self.close_ssh_profile_modal();
+        self.ssh_profiles_error = None;
+        Ok(())
     }
 
     pub fn apply_ssh_profiles_to(&mut self, profiles: &mut Vec<SshProfile>) -> Result<(), String> {
@@ -391,6 +439,25 @@ impl SettingsDraft {
 
 fn parse_f32(value: &str) -> Option<f32> {
     value.trim().parse::<f32>().ok()
+}
+
+fn update_ssh_profile_draft(draft: &mut SshProfileDraft, field: SshProfileField, value: String) {
+    match field {
+        SshProfileField::Name => draft.name = value,
+        SshProfileField::Host => draft.host = value,
+        SshProfileField::Port => draft.port = value,
+        SshProfileField::User => draft.user = value,
+        SshProfileField::AuthMethod => {
+            draft.auth_method = match value.as_str() {
+                "key_file" => SshAuthMethod::KeyFile,
+                "password" => SshAuthMethod::Password,
+                _ => draft.auth_method,
+            };
+        }
+        SshProfileField::IdentityFile => draft.identity_file = value,
+        SshProfileField::Password => draft.password = value,
+        SshProfileField::ProxyCommand => draft.proxy_command = value,
+    }
 }
 
 pub fn view_category<'a>(
@@ -794,6 +861,86 @@ mod tests {
 
         draft.update_ssh_profile(0, SshProfileField::Password, "newpass".into());
         assert_eq!(draft.ssh_profiles[0].password, "newpass");
+    }
+
+    #[test]
+    fn ssh_profile_modal_create_appends_profile() {
+        let mut draft = SettingsDraft::from_config(&crate::config::AppConfig::default());
+
+        draft.open_create_ssh_profile_modal();
+        draft.update_ssh_profile_modal(SshProfileField::Name, "prod".into());
+        draft.update_ssh_profile_modal(SshProfileField::Host, "10.0.0.1".into());
+        draft.update_ssh_profile_modal(SshProfileField::User, "deploy".into());
+        draft.save_ssh_profile_modal().unwrap();
+
+        assert_eq!(draft.ssh_profiles.len(), 1);
+        assert_eq!(draft.ssh_profiles[0].name, "prod");
+        assert_eq!(draft.ssh_profiles[0].host, "10.0.0.1");
+        assert!(draft.ssh_profile_modal_mode.is_none());
+    }
+
+    #[test]
+    fn ssh_profile_modal_edit_replaces_selected_profile() {
+        let mut draft = SettingsDraft::from_config(&crate::config::AppConfig {
+            ssh_profiles: vec![SshProfile {
+                name: "old".into(),
+                host: "old.example.com".into(),
+                port: 22,
+                user: "deploy".into(),
+                auth_method: SshAuthMethod::KeyFile,
+                identity_file: Some("~/.ssh/id_ed25519".into()),
+                password: None,
+                proxy_command: None,
+            }],
+            ..Default::default()
+        });
+
+        draft.open_edit_ssh_profile_modal(0);
+        draft.update_ssh_profile_modal(SshProfileField::Name, "new".into());
+        draft.update_ssh_profile_modal(SshProfileField::Host, "new.example.com".into());
+        draft.save_ssh_profile_modal().unwrap();
+
+        assert_eq!(draft.ssh_profiles.len(), 1);
+        assert_eq!(draft.ssh_profiles[0].name, "new");
+        assert_eq!(draft.ssh_profiles[0].host, "new.example.com");
+        assert_eq!(draft.ssh_profiles[0].identity_file, "~/.ssh/id_ed25519");
+    }
+
+    #[test]
+    fn ssh_profile_modal_cancel_leaves_profiles_unchanged() {
+        let mut draft = SettingsDraft::from_config(&crate::config::AppConfig {
+            ssh_profiles: vec![SshProfile {
+                name: "prod".into(),
+                host: "prod.example.com".into(),
+                port: 22,
+                user: "deploy".into(),
+                auth_method: SshAuthMethod::Password,
+                identity_file: None,
+                password: Some("secret".into()),
+                proxy_command: None,
+            }],
+            ..Default::default()
+        });
+
+        draft.open_edit_ssh_profile_modal(0);
+        draft.update_ssh_profile_modal(SshProfileField::Host, "changed.example.com".into());
+        draft.close_ssh_profile_modal();
+
+        assert_eq!(draft.ssh_profiles[0].host, "prod.example.com");
+        assert!(draft.ssh_profile_modal_mode.is_none());
+    }
+
+    #[test]
+    fn ssh_profile_modal_save_requires_host() {
+        let mut draft = SettingsDraft::from_config(&crate::config::AppConfig::default());
+
+        draft.open_create_ssh_profile_modal();
+        draft.update_ssh_profile_modal(SshProfileField::Name, "missing-host".into());
+        let err = draft.save_ssh_profile_modal().unwrap_err();
+
+        assert_eq!(err, "SSH profile needs a Host before saving.");
+        assert!(draft.ssh_profiles.is_empty());
+        assert!(draft.ssh_profile_modal_mode.is_some());
     }
 
     #[test]
