@@ -1,11 +1,16 @@
-use crate::config::SshProfile;
+use crate::config::{SshAuthMethod, SshProfile};
 use crate::session::OutputEvent;
 use async_trait::async_trait;
 use iced::futures::channel::mpsc as futures_mpsc;
 use russh::keys::*;
 use russh::*;
 use std::io::Write;
+use std::pin::Pin;
+use std::process::Stdio;
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::mpsc as tokio_mpsc;
 
 use crate::ansi;
@@ -53,6 +58,46 @@ impl Write for SshWriter {
 
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
+    }
+}
+
+struct ProxyCommandStream {
+    child: Child,
+    stdout: ChildStdout,
+    stdin: ChildStdin,
+}
+
+impl AsyncRead for ProxyCommandStream {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.stdout).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for ProxyCommandStream {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.stdin).poll_write(cx, buf)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.stdin).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.stdin).poll_shutdown(cx)
+    }
+}
+
+impl Drop for ProxyCommandStream {
+    fn drop(&mut self) {
+        let _ = self.child.start_kill();
     }
 }
 
@@ -132,27 +177,34 @@ async fn ssh_task(
     );
 
     // Load password from OS keychain on demand (not at app startup)
-    if profile.password.is_none() && profile.identity_file.is_none() {
+    if matches!(profile.auth_method, SshAuthMethod::Password) && profile.password.is_none() {
         profile.password = crate::keychain::get_password(&profile.host, &profile.user);
     }
 
     // Auth method hint
-    if let Some(ref identity) = profile.identity_file {
-        send_status(
-            output_tx,
-            tab_id,
-            &format!(
-                "         {}  {}\r\n",
-                ansi::cyan("Using private key from"),
-                ansi::bold_underline(identity)
-            ),
-        );
-    } else if profile.password.is_some() {
-        send_status(
-            output_tx,
-            tab_id,
-            &format!("         {}\r\n", ansi::cyan("Using saved password")),
-        );
+    match profile.auth_method {
+        SshAuthMethod::KeyFile => {
+            if let Some(ref identity) = profile.identity_file {
+                send_status(
+                    output_tx,
+                    tab_id,
+                    &format!(
+                        "         {}  {}\r\n",
+                        ansi::cyan("Using private key from"),
+                        ansi::bold_underline(identity)
+                    ),
+                );
+            }
+        }
+        SshAuthMethod::Password => {
+            if profile.password.is_some() {
+                send_status(
+                    output_tx,
+                    tab_id,
+                    &format!("         {}\r\n", ansi::cyan("Using saved password")),
+                );
+            }
+        }
     }
 
     // --- TCP + SSH handshake ---
@@ -166,8 +218,18 @@ async fn ssh_task(
         fingerprint_tx: Some(fp_tx),
     };
 
-    let addr = format!("{}:{}", profile.host, profile.port);
-    let mut session = client::connect(config, &*addr, handler).await?;
+    let mut session = if let Some(ref proxy_command) = profile.proxy_command {
+        send_status(
+            output_tx,
+            tab_id,
+            &format!("         {}\r\n", ansi::cyan("Using ProxyCommand")),
+        );
+        let stream = spawn_proxy_command(proxy_command, &profile.host, profile.port)?;
+        client::connect_stream(config, stream, handler).await?
+    } else {
+        let addr = format!("{}:{}", profile.host, profile.port);
+        client::connect(config, &*addr, handler).await?
+    };
 
     // Display host key fingerprint
     if let Ok(fp) = fp_rx.await {
@@ -198,22 +260,33 @@ async fn ssh_task(
         profile.user.clone()
     };
 
-    let authenticated = if let Some(ref identity_path) = profile.identity_file {
-        let expanded = if identity_path.starts_with("~/") {
-            dirs::home_dir()
-                .map(|h| h.join(&identity_path[2..]).to_string_lossy().to_string())
-                .unwrap_or_else(|| identity_path.clone())
-        } else {
-            identity_path.clone()
-        };
-        let key_pair = load_secret_key(&expanded, None)?;
-        session
-            .authenticate_publickey(&user, Arc::new(key_pair))
-            .await?
-    } else if let Some(ref password) = profile.password {
-        session.authenticate_password(&user, password).await?
-    } else {
-        try_default_keys(&mut session, &user).await
+    let authenticated = match profile.auth_method {
+        SshAuthMethod::KeyFile => {
+            let Some(ref identity_path) = profile.identity_file else {
+                return Err(
+                    "Key file authentication selected but no key file is configured".into(),
+                );
+            };
+            let expanded = if identity_path.starts_with("~/") {
+                dirs::home_dir()
+                    .map(|h| h.join(&identity_path[2..]).to_string_lossy().to_string())
+                    .unwrap_or_else(|| identity_path.clone())
+            } else {
+                identity_path.clone()
+            };
+            let key_pair = load_secret_key(&expanded, None)?;
+            session
+                .authenticate_publickey(&user, Arc::new(key_pair))
+                .await?
+        }
+        SshAuthMethod::Password => {
+            let Some(ref password) = profile.password else {
+                return Err(
+                    "Password authentication selected but no password is configured".into(),
+                );
+            };
+            session.authenticate_password(&user, password).await?
+        }
     };
 
     if !authenticated {
@@ -273,31 +346,63 @@ async fn ssh_task(
     Ok(())
 }
 
-async fn try_default_keys(session: &mut client::Handle<SshHandler>, user: &str) -> bool {
-    let home = match dirs::home_dir() {
-        Some(h) => h,
-        None => return false,
-    };
-    let candidates = [
-        home.join(".ssh/id_ed25519"),
-        home.join(".ssh/id_rsa"),
-        home.join(".ssh/id_ecdsa"),
-    ];
-    for path in &candidates {
-        if !path.exists() {
-            continue;
-        }
-        let key_pair = match load_secret_key(path, None) {
-            Ok(k) => k,
-            Err(_) => continue,
-        };
-        match session
-            .authenticate_publickey(user, Arc::new(key_pair))
-            .await
-        {
-            Ok(true) => return true,
-            _ => continue,
-        }
+fn expand_proxy_command(command: &str, host: &str, port: u16) -> String {
+    command.replace("%h", host).replace("%p", &port.to_string())
+}
+
+fn spawn_proxy_command(
+    command: &str,
+    host: &str,
+    port: u16,
+) -> Result<ProxyCommandStream, Box<dyn std::error::Error + Send + Sync>> {
+    let command = expand_proxy_command(command, host, port);
+
+    #[cfg(target_os = "windows")]
+    let mut child = Command::new("cmd")
+        .arg("/C")
+        .arg(&command)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()?;
+
+    #[cfg(not(target_os = "windows"))]
+    let mut child = Command::new("sh")
+        .arg("-c")
+        .arg(&command)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()?;
+
+    let stdin = child.stdin.take().ok_or("ProxyCommand stdin unavailable")?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or("ProxyCommand stdout unavailable")?;
+
+    Ok(ProxyCommandStream {
+        child,
+        stdout,
+        stdin,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proxy_command_replaces_host_and_port_tokens() {
+        let command = expand_proxy_command(
+            "cloudflared access ssh --hostname %h --url localhost:%p",
+            "myyrakle-remote.chainshift.co",
+            2222,
+        );
+
+        assert_eq!(
+            command,
+            "cloudflared access ssh --hostname myyrakle-remote.chainshift.co --url localhost:2222"
+        );
     }
-    false
 }

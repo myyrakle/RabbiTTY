@@ -75,23 +75,24 @@ impl App {
 
             // ── Settings ────────────────────────────────────────────
             Message::AddSshProfile => {
-                self.config
-                    .ssh_profiles
-                    .push(crate::config::SshProfile::default());
-                self.settings_draft = SettingsDraft::from_config(&self.config);
+                self.settings_draft.add_ssh_profile();
             }
             Message::RemoveSshProfile(index) => {
-                if index < self.config.ssh_profiles.len() {
-                    self.config.ssh_profiles.remove(index);
-                    self.settings_draft = SettingsDraft::from_config(&self.config);
-                }
+                self.settings_draft.remove_ssh_profile(index);
             }
             Message::SshProfileFieldChanged(index, field, value) => {
                 self.settings_draft.update_ssh_profile(index, field, value);
             }
             Message::SaveSshProfiles => {
                 self.settings_draft
-                    .apply_ssh_profiles_to(&mut self.config.ssh_profiles);
+                    .load_ssh_passwords_from_keychain(&self.config.ssh_profiles);
+                if let Err(err) = self
+                    .settings_draft
+                    .apply_ssh_profiles_to(&mut self.config.ssh_profiles)
+                {
+                    eprintln!("Failed to save SSH profiles: {err}");
+                    return Task::none();
+                }
                 // Save passwords to OS keychain (not in config file)
                 for profile in &self.config.ssh_profiles {
                     if let Some(ref pw) = profile.password {
@@ -100,15 +101,26 @@ impl App {
                         crate::keychain::delete_password(&profile.host, &profile.user);
                     }
                 }
-                if let Err(err) = self.config.save() {
-                    eprintln!("Failed to save config: {err}");
+                match self.config.save() {
+                    Ok(()) => {
+                        self.settings_draft = SettingsDraft::from_config(&self.config);
+                        self.settings_draft.set_ssh_profiles_saved();
+                    }
+                    Err(err) => {
+                        let message = format!("Failed to save SSH profiles: {err}");
+                        eprintln!("{message}");
+                        self.settings_draft.set_ssh_profiles_error(message);
+                    }
                 }
-                self.settings_draft = SettingsDraft::from_config(&self.config);
             }
             Message::OpenSettingsTab => {
                 self.settings_open = true;
                 self.active_tab = SETTINGS_TAB_INDEX;
                 self.settings_draft = SettingsDraft::from_config(&self.config);
+                if matches!(self.settings_category, SettingsCategory::Ssh) {
+                    self.settings_draft
+                        .load_ssh_passwords_from_keychain(&self.config.ssh_profiles);
+                }
             }
             Message::SelectSettingsCategory(category) => {
                 self.settings_category = category;
