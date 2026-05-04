@@ -103,7 +103,7 @@ impl App {
                 return self.create_tab(shell);
             }
             Message::CreateSshTab(profile_index) => {
-                if let Some(profile) = self.config.ssh_profiles.get(profile_index) {
+                if let Some(profile) = self.session_ssh_profiles().get(profile_index) {
                     let shell = ShellKind::Ssh(profile.clone());
                     return self.create_tab(shell);
                 }
