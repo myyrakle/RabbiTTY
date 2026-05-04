@@ -478,8 +478,10 @@ mod tests {
             host: "prod.example.com".into(),
             port: 22,
             user: "deploy".into(),
+            auth_method: crate::config::SshAuthMethod::Password,
             identity_file: None,
             password: None,
+            proxy_command: None,
         };
         assert_eq!(with_name.tab_title(), "Production");
 
@@ -488,8 +490,10 @@ mod tests {
             host: "dev.example.com".into(),
             port: 22,
             user: "user".into(),
+            auth_method: crate::config::SshAuthMethod::Password,
             identity_file: None,
             password: None,
+            proxy_command: None,
         };
         assert_eq!(no_name.tab_title(), "user@dev.example.com");
 
@@ -498,8 +502,10 @@ mod tests {
             host: "bare.host".into(),
             port: 22,
             user: String::new(),
+            auth_method: crate::config::SshAuthMethod::Password,
             identity_file: None,
             password: None,
+            proxy_command: None,
         };
         assert_eq!(no_name_no_user.tab_title(), "bare.host");
     }

@@ -1,3 +1,4 @@
+use crate::config::SshAuthMethod;
 use crate::gui::app::Message;
 use crate::gui::components::{button_primary, button_secondary};
 use crate::gui::settings::{SettingsDraft, SshProfileDraft, SshProfileField};
@@ -14,6 +15,33 @@ pub fn view(draft: &SettingsDraft, palette: Palette) -> Element<'_, Message> {
 
     if draft.ssh_profiles.is_empty() {
         items.push(empty_state(palette));
+    }
+
+    if let Some(error) = &draft.ssh_profiles_error {
+        items.push(
+            container(text(error).size(12).color(Color {
+                a: 0.95,
+                ..palette.error
+            }))
+            .padding([8, 10])
+            .width(Length::Fill)
+            .style(move |_theme: &iced::Theme| iced::widget::container::Style {
+                background: Some(Background::Color(Color {
+                    a: 0.08,
+                    ..palette.error
+                })),
+                border: Border {
+                    radius: RADIUS_SMALL.into(),
+                    width: 1.0,
+                    color: Color {
+                        a: 0.25,
+                        ..palette.error
+                    },
+                },
+                ..Default::default()
+            })
+            .into(),
+        );
     }
 
     items.push(
@@ -130,18 +158,68 @@ fn profile_card<'a>(
         .size(11)
         .color(palette.text_secondary);
 
-    let identity_row = styled_input(
-        "Key File  (e.g. ~/.ssh/id_rsa)",
-        &profile.identity_file,
+    let key_button = if matches!(profile.auth_method, SshAuthMethod::KeyFile) {
+        button_primary("Key File", palette)
+    } else {
+        button_secondary("Key File", palette).on_press(Message::SshProfileFieldChanged(
+            index,
+            SshProfileField::AuthMethod,
+            "key_file".into(),
+        ))
+    };
+
+    let password_button = if matches!(profile.auth_method, SshAuthMethod::Password) {
+        button_primary("Password", palette)
+    } else {
+        button_secondary("Password", palette).on_press(Message::SshProfileFieldChanged(
+            index,
+            SshProfileField::AuthMethod,
+            "password".into(),
+        ))
+    };
+
+    let auth_method_row = row![key_button, password_button]
+        .spacing(SPACING_SMALL)
+        .width(Length::Fill);
+
+    let auth_input: Element<'a, Message> = if matches!(profile.auth_method, SshAuthMethod::KeyFile)
+    {
+        styled_input(
+            "Key File  (e.g. ~/.ssh/id_rsa)",
+            &profile.identity_file,
+            index,
+            SshProfileField::IdentityFile,
+            palette,
+        )
+        .width(Length::Fill)
+        .into()
+    } else {
+        styled_password("Password", &profile.password, index, palette).into()
+    };
+
+    let auth_hint = text(if matches!(profile.auth_method, SshAuthMethod::Password) {
+        "Password is stored securely in your OS keychain"
+    } else {
+        "Key file path is stored in config"
+    })
+    .size(10)
+    .color(Color {
+        a: 0.35,
+        ..palette.text
+    });
+
+    let proxy_label = text("Proxy Command").size(11).color(palette.text_secondary);
+
+    let proxy_row = styled_input(
+        "ProxyCommand  (e.g. cloudflared access ssh --hostname %h)",
+        &profile.proxy_command,
         index,
-        SshProfileField::IdentityFile,
+        SshProfileField::ProxyCommand,
         palette,
     )
     .width(Length::Fill);
 
-    let password_row = styled_password("Password", &profile.password, index, palette);
-
-    let auth_hint = text("Password is stored securely in your OS keychain")
+    let proxy_hint = text("%h and %p are replaced with host and port")
         .size(10)
         .color(Color {
             a: 0.35,
@@ -156,9 +234,12 @@ fn profile_card<'a>(
             user_row,
             name_row,
             auth_label,
-            identity_row,
-            password_row,
+            auth_method_row,
+            auth_input,
             auth_hint,
+            proxy_label,
+            proxy_row,
+            proxy_hint,
         ]
         .spacing(8)
         .width(Length::Fill),
