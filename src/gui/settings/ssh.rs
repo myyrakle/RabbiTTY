@@ -161,6 +161,7 @@ fn profile_row<'a>(
             .spacing(4)
             .width(Length::Fill),
             row![
+                icon_button("\u{25b6}", palette).on_press(Message::CreateSshTab(index)),
                 icon_button("\u{270e}", palette).on_press(Message::EditSshProfile(index)),
                 icon_button("\u{1f5d1}", palette).on_press(Message::RequestRemoveSshProfile(index)),
             ]
