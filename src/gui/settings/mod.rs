@@ -56,6 +56,7 @@ pub enum SshProfileField {
     AuthMethod,
     IdentityFile,
     Password,
+    ProxyCommandEnabled,
     ProxyCommand,
 }
 
@@ -107,6 +108,7 @@ pub struct SshProfileDraft {
     pub auth_method: SshAuthMethod,
     pub identity_file: String,
     pub password: String,
+    pub proxy_command_enabled: bool,
     pub proxy_command: String,
 }
 
@@ -140,6 +142,10 @@ impl SshProfileDraft {
             auth_method: profile.auth_method,
             identity_file: profile.identity_file.clone().unwrap_or_default(),
             password: profile.password.clone().unwrap_or_default(),
+            proxy_command_enabled: profile
+                .proxy_command
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty()),
             proxy_command: profile.proxy_command.clone().unwrap_or_default(),
         }
     }
@@ -175,13 +181,15 @@ impl SshProfileDraft {
             } else {
                 None
             },
-            proxy_command: {
+            proxy_command: if self.proxy_command_enabled {
                 let v = self.proxy_command.trim();
                 if v.is_empty() {
                     None
                 } else {
                     Some(v.to_string())
                 }
+            } else {
+                None
             },
         })
     }
@@ -192,7 +200,7 @@ impl SshProfileDraft {
             && self.user.trim().is_empty()
             && self.identity_file.trim().is_empty()
             && self.password.trim().is_empty()
-            && self.proxy_command.trim().is_empty()
+            && (!self.proxy_command_enabled || self.proxy_command.trim().is_empty())
             && self.port.trim().parse::<u16>().unwrap_or(22) == 22
     }
 }
@@ -504,6 +512,9 @@ fn update_ssh_profile_draft(draft: &mut SshProfileDraft, field: SshProfileField,
         }
         SshProfileField::IdentityFile => draft.identity_file = value,
         SshProfileField::Password => draft.password = value,
+        SshProfileField::ProxyCommandEnabled => {
+            draft.proxy_command_enabled = value == "true";
+        }
         SshProfileField::ProxyCommand => draft.proxy_command = value,
     }
 }
@@ -843,6 +854,7 @@ mod tests {
             auth_method: SshAuthMethod::KeyFile,
             identity_file: "~/.ssh/id_ed25519".into(),
             password: "saved-password".into(),
+            proxy_command_enabled: true,
             proxy_command: "  cloudflared access ssh --hostname %h  ".into(),
         };
 
@@ -858,6 +870,50 @@ mod tests {
     }
 
     #[test]
+    fn ssh_draft_proxy_command_requires_enabled_flag() {
+        let mut draft = SshProfileDraft {
+            name: "test".into(),
+            host: "host".into(),
+            port: "22".into(),
+            user: "me".into(),
+            auth_method: SshAuthMethod::Password,
+            identity_file: "".into(),
+            password: "secret".into(),
+            proxy_command_enabled: false,
+            proxy_command: "cloudflared access ssh --hostname %h".into(),
+        };
+
+        let disabled = draft.to_profile().unwrap();
+        assert!(disabled.proxy_command.is_none());
+
+        draft.proxy_command_enabled = true;
+        let enabled = draft.to_profile().unwrap();
+        assert_eq!(
+            enabled.proxy_command.as_deref(),
+            Some("cloudflared access ssh --hostname %h")
+        );
+    }
+
+    #[test]
+    fn ssh_draft_from_profile_enables_proxy_command_when_present() {
+        let profile = SshProfile {
+            name: "proxy".into(),
+            host: "proxy.example.com".into(),
+            port: 22,
+            user: "deploy".into(),
+            auth_method: SshAuthMethod::KeyFile,
+            identity_file: Some("~/.ssh/id_ed25519".into()),
+            password: None,
+            proxy_command: Some("cloudflared access ssh --hostname %h".into()),
+        };
+
+        let draft = SshProfileDraft::from_profile(&profile);
+
+        assert!(draft.proxy_command_enabled);
+        assert_eq!(draft.proxy_command, "cloudflared access ssh --hostname %h");
+    }
+
+    #[test]
     fn ssh_draft_empty_password_becomes_none() {
         let draft = SshProfileDraft {
             name: "test".into(),
@@ -867,6 +923,7 @@ mod tests {
             auth_method: SshAuthMethod::Password,
             identity_file: "".into(),
             password: "  ".into(),
+            proxy_command_enabled: false,
             proxy_command: "".into(),
         };
         let profile = draft.to_profile().unwrap();
@@ -884,6 +941,7 @@ mod tests {
             auth_method: SshAuthMethod::Password,
             identity_file: "".into(),
             password: "pass".into(),
+            proxy_command_enabled: false,
             proxy_command: "".into(),
         };
         assert!(draft.to_profile().is_none());
