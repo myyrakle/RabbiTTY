@@ -40,6 +40,8 @@ pub enum Message {
     CancelRemoveSshProfile,
     ConfirmRemoveSshProfile,
     SshProfileModalFieldChanged(SshProfileField, String),
+    TestSshConnection,
+    SshConnectionTestFinished(Result<(), String>),
     CloseSshProfileModal,
     SaveSshProfileModal,
     CreateSshTab(usize),

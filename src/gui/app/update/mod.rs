@@ -131,6 +131,20 @@ impl App {
             Message::SshProfileModalFieldChanged(field, value) => {
                 self.settings_draft.update_ssh_profile_modal(field, value);
             }
+            Message::TestSshConnection => match self.settings_draft.begin_ssh_connection_test() {
+                Ok(profile) => {
+                    return Task::perform(
+                        crate::ssh::test_ssh_connection(profile, std::time::Duration::from_secs(5)),
+                        Message::SshConnectionTestFinished,
+                    );
+                }
+                Err(err) => {
+                    eprintln!("Failed to start SSH connection test: {err}");
+                }
+            },
+            Message::SshConnectionTestFinished(result) => {
+                self.settings_draft.finish_ssh_connection_test(result);
+            }
             Message::CloseSshProfileModal => {
                 self.settings_draft.close_ssh_profile_modal();
             }

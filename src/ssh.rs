@@ -136,6 +136,63 @@ pub fn spawn_ssh_session(
     SshSessionHandle { writer, resize_tx }
 }
 
+pub async fn test_ssh_connection(
+    mut profile: SshProfile,
+    timeout: std::time::Duration,
+) -> Result<(), String> {
+    match tokio::time::timeout(timeout, async move {
+        test_ssh_connection_inner(&mut profile, timeout).await
+    })
+    .await
+    {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(err)) => Err(err.to_string()),
+        Err(_) => Err(format!(
+            "Connection timed out after {} seconds.",
+            timeout.as_secs()
+        )),
+    }
+}
+
+async fn test_ssh_connection_inner(
+    profile: &mut SshProfile,
+    timeout: std::time::Duration,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if matches!(profile.auth_method, SshAuthMethod::Password) && profile.password.is_none() {
+        profile.password = crate::keychain::get_password(&profile.host, &profile.user);
+    }
+
+    let config = Arc::new(client::Config {
+        inactivity_timeout: Some(timeout),
+        ..<_>::default()
+    });
+
+    let (fp_tx, _fp_rx) = tokio::sync::oneshot::channel();
+    let handler = SshHandler {
+        fingerprint_tx: Some(fp_tx),
+    };
+
+    let mut session = if let Some(ref proxy_command) = profile.proxy_command {
+        let stream = spawn_proxy_command(proxy_command, &profile.host, profile.port)?;
+        client::connect_stream(config, stream, handler).await?
+    } else {
+        let addr = format!("{}:{}", profile.host, profile.port);
+        client::connect(config, &*addr, handler).await?
+    };
+
+    let user = ssh_user(&profile.user);
+    let authenticated = authenticate_session(&mut session, profile, &user).await?;
+
+    if !authenticated {
+        return Err("Authentication failed".into());
+    }
+
+    let _ = session
+        .disconnect(Disconnect::ByApplication, "Connection test complete", "")
+        .await;
+    Ok(())
+}
+
 // ── Status message helper ───────────────────────────────────────────
 fn send_status(output_tx: &mut futures_mpsc::UnboundedSender<OutputEvent>, tab_id: u64, msg: &str) {
     let _ = output_tx.unbounded_send(OutputEvent::Data {
@@ -252,42 +309,9 @@ async fn ssh_task(
         &format!("  {badge}  {}\r\n", ansi::yellow("Authenticating...")),
     );
 
-    let user = if profile.user.is_empty() {
-        std::env::var("USER")
-            .or_else(|_| std::env::var("USERNAME"))
-            .unwrap_or_else(|_| "root".into())
-    } else {
-        profile.user.clone()
-    };
+    let user = ssh_user(&profile.user);
 
-    let authenticated = match profile.auth_method {
-        SshAuthMethod::KeyFile => {
-            let Some(ref identity_path) = profile.identity_file else {
-                return Err(
-                    "Key file authentication selected but no key file is configured".into(),
-                );
-            };
-            let expanded = if identity_path.starts_with("~/") {
-                dirs::home_dir()
-                    .map(|h| h.join(&identity_path[2..]).to_string_lossy().to_string())
-                    .unwrap_or_else(|| identity_path.clone())
-            } else {
-                identity_path.clone()
-            };
-            let key_pair = load_secret_key(&expanded, None)?;
-            session
-                .authenticate_publickey(&user, Arc::new(key_pair))
-                .await?
-        }
-        SshAuthMethod::Password => {
-            let Some(ref password) = profile.password else {
-                return Err(
-                    "Password authentication selected but no password is configured".into(),
-                );
-            };
-            session.authenticate_password(&user, password).await?
-        }
-    };
+    let authenticated = authenticate_session(&mut session, &profile, &user).await?;
 
     if !authenticated {
         return Err("Authentication failed".into());
@@ -344,6 +368,51 @@ async fn ssh_task(
     }
 
     Ok(())
+}
+
+fn ssh_user(configured_user: &str) -> String {
+    if configured_user.is_empty() {
+        std::env::var("USER")
+            .or_else(|_| std::env::var("USERNAME"))
+            .unwrap_or_else(|_| "root".into())
+    } else {
+        configured_user.to_string()
+    }
+}
+
+async fn authenticate_session<H: client::Handler>(
+    session: &mut client::Handle<H>,
+    profile: &SshProfile,
+    user: &str,
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    Ok(match profile.auth_method {
+        SshAuthMethod::KeyFile => {
+            let Some(ref identity_path) = profile.identity_file else {
+                return Err(
+                    "Key file authentication selected but no key file is configured".into(),
+                );
+            };
+            let expanded = if identity_path.starts_with("~/") {
+                dirs::home_dir()
+                    .map(|h| h.join(&identity_path[2..]).to_string_lossy().to_string())
+                    .unwrap_or_else(|| identity_path.clone())
+            } else {
+                identity_path.clone()
+            };
+            let key_pair = load_secret_key(&expanded, None)?;
+            session
+                .authenticate_publickey(user, Arc::new(key_pair))
+                .await?
+        }
+        SshAuthMethod::Password => {
+            let Some(ref password) = profile.password else {
+                return Err(
+                    "Password authentication selected but no password is configured".into(),
+                );
+            };
+            session.authenticate_password(user, password).await?
+        }
+    })
 }
 
 fn expand_proxy_command(command: &str, host: &str, port: u16) -> String {

@@ -1,7 +1,9 @@
 use crate::config::SshAuthMethod;
 use crate::gui::app::Message;
 use crate::gui::components::{button_primary, button_secondary};
-use crate::gui::settings::{SettingsDraft, SshProfileDraft, SshProfileField, SshProfileModalMode};
+use crate::gui::settings::{
+    SettingsDraft, SshConnectionTestStatus, SshProfileDraft, SshProfileField, SshProfileModalMode,
+};
 use crate::gui::theme::{Palette, RADIUS_NORMAL, RADIUS_SMALL, SPACING_NORMAL, SPACING_SMALL};
 use iced::widget::{button, center, column, container, mouse_area, row, stack, text, text_input};
 use iced::{Alignment, Background, Border, Color, Element, Length};
@@ -27,6 +29,7 @@ pub fn modal_overlay<'a>(
             mode,
             &draft.ssh_profile_modal_draft,
             draft.ssh_profiles_error.as_deref(),
+            &draft.ssh_connection_test_status,
             palette,
         );
     }
@@ -237,6 +240,7 @@ fn modal_overlay_content<'a>(
     mode: SshProfileModalMode,
     profile: &'a SshProfileDraft,
     error: Option<&'a str>,
+    test_status: &'a SshConnectionTestStatus,
     palette: Palette,
 ) -> Element<'a, Message> {
     let backdrop = mouse_area(backdrop(palette)).on_press(Message::CloseSshProfileModal);
@@ -261,8 +265,17 @@ fn modal_overlay_content<'a>(
         modal_items.push(status_banner(error, palette));
     }
     modal_items.push(profile_form(profile, palette));
+    if let Some(status) = connection_test_status_banner(test_status, palette) {
+        modal_items.push(status);
+    }
+    let test_button = if matches!(test_status, SshConnectionTestStatus::Testing) {
+        button_secondary("Testing...", palette)
+    } else {
+        button_secondary("Test Connection", palette).on_press(Message::TestSshConnection)
+    };
     modal_items.push(
         row![
+            test_button,
             container("").width(Length::Fill),
             button_secondary("Cancel", palette).on_press(Message::CloseSshProfileModal),
             button_primary("Save", palette).on_press(Message::SaveSshProfileModal),
@@ -302,6 +315,18 @@ fn modal_overlay_content<'a>(
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
+}
+
+fn connection_test_status_banner<'a>(
+    status: &'a SshConnectionTestStatus,
+    palette: Palette,
+) -> Option<Element<'a, Message>> {
+    match status {
+        SshConnectionTestStatus::Idle => None,
+        SshConnectionTestStatus::Testing => Some(status_banner("Testing connection...", palette)),
+        SshConnectionTestStatus::Success(message) => Some(status_banner(message, palette)),
+        SshConnectionTestStatus::Failure(message) => Some(status_banner(message, palette)),
+    }
 }
 
 fn backdrop(palette: Palette) -> container::Container<'static, Message> {
@@ -421,7 +446,9 @@ fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'
 }
 
 fn status_banner<'a>(message: &'a str, palette: Palette) -> Element<'a, Message> {
-    let is_saved = message == "SSH profiles saved.";
+    let is_saved = message == "SSH profiles saved."
+        || message == "Connection successful."
+        || message == "Testing connection...";
     let color = if is_saved {
         palette.accent
     } else {

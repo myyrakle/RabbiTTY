@@ -116,6 +116,14 @@ pub enum SshProfileModalMode {
     Edit(usize),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SshConnectionTestStatus {
+    Idle,
+    Testing,
+    Success(String),
+    Failure(String),
+}
+
 impl Default for SshProfileDraft {
     fn default() -> Self {
         Self::from_profile(&SshProfile::default())
@@ -215,6 +223,7 @@ pub struct SettingsDraft {
     pub ssh_profile_modal_mode: Option<SshProfileModalMode>,
     pub ssh_profile_modal_draft: SshProfileDraft,
     pub ssh_profile_delete_pending: Option<usize>,
+    pub ssh_connection_test_status: SshConnectionTestStatus,
 }
 
 impl SettingsDraft {
@@ -248,6 +257,7 @@ impl SettingsDraft {
             ssh_profile_modal_mode: None,
             ssh_profile_modal_draft: SshProfileDraft::default(),
             ssh_profile_delete_pending: None,
+            ssh_connection_test_status: SshConnectionTestStatus::Idle,
         }
     }
 
@@ -302,6 +312,7 @@ impl SettingsDraft {
         self.ssh_profiles_error = None;
         self.ssh_profile_modal_mode = Some(SshProfileModalMode::Create);
         self.ssh_profile_modal_draft = SshProfileDraft::default();
+        self.ssh_connection_test_status = SshConnectionTestStatus::Idle;
     }
 
     pub fn open_edit_ssh_profile_modal(&mut self, index: usize) {
@@ -309,17 +320,38 @@ impl SettingsDraft {
             self.ssh_profiles_error = None;
             self.ssh_profile_modal_mode = Some(SshProfileModalMode::Edit(index));
             self.ssh_profile_modal_draft = profile.clone();
+            self.ssh_connection_test_status = SshConnectionTestStatus::Idle;
         }
     }
 
     pub fn close_ssh_profile_modal(&mut self) {
         self.ssh_profile_modal_mode = None;
         self.ssh_profile_modal_draft = SshProfileDraft::default();
+        self.ssh_connection_test_status = SshConnectionTestStatus::Idle;
     }
 
     pub fn update_ssh_profile_modal(&mut self, field: SshProfileField, value: String) {
         self.ssh_profiles_error = None;
+        self.ssh_connection_test_status = SshConnectionTestStatus::Idle;
         update_ssh_profile_draft(&mut self.ssh_profile_modal_draft, field, value);
+    }
+
+    pub fn begin_ssh_connection_test(&mut self) -> Result<SshProfile, String> {
+        let Some(profile) = self.ssh_profile_modal_draft.to_profile() else {
+            let message = "Host is required before testing.".to_string();
+            self.ssh_connection_test_status = SshConnectionTestStatus::Failure(message.clone());
+            return Err(message);
+        };
+        self.ssh_profiles_error = None;
+        self.ssh_connection_test_status = SshConnectionTestStatus::Testing;
+        Ok(profile)
+    }
+
+    pub fn finish_ssh_connection_test(&mut self, result: Result<(), String>) {
+        self.ssh_connection_test_status = match result {
+            Ok(()) => SshConnectionTestStatus::Success("Connection successful.".to_string()),
+            Err(message) => SshConnectionTestStatus::Failure(message),
+        };
     }
 
     pub fn save_ssh_profile_modal(&mut self) -> Result<(), String> {
@@ -1027,6 +1059,47 @@ mod tests {
         assert_eq!(draft.ssh_profiles.len(), 1);
         assert_eq!(draft.ssh_profiles[0].host, "prod.example.com");
         assert!(draft.ssh_profile_delete_pending.is_none());
+    }
+
+    #[test]
+    fn ssh_connection_test_requires_host() {
+        let mut draft = SettingsDraft::from_config(&crate::config::AppConfig::default());
+
+        draft.open_create_ssh_profile_modal();
+        let result = draft.begin_ssh_connection_test();
+
+        assert!(result.is_err());
+        assert_eq!(
+            draft.ssh_connection_test_status,
+            SshConnectionTestStatus::Failure("Host is required before testing.".into())
+        );
+    }
+
+    #[test]
+    fn ssh_connection_test_tracks_testing_and_result() {
+        let mut draft = SettingsDraft::from_config(&crate::config::AppConfig::default());
+
+        draft.open_create_ssh_profile_modal();
+        draft.update_ssh_profile_modal(SshProfileField::Host, "example.com".into());
+        let profile = draft.begin_ssh_connection_test().unwrap();
+
+        assert_eq!(profile.host, "example.com");
+        assert_eq!(
+            draft.ssh_connection_test_status,
+            SshConnectionTestStatus::Testing
+        );
+
+        draft.finish_ssh_connection_test(Err("Authentication failed".into()));
+        assert_eq!(
+            draft.ssh_connection_test_status,
+            SshConnectionTestStatus::Failure("Authentication failed".into())
+        );
+
+        draft.finish_ssh_connection_test(Ok(()));
+        assert_eq!(
+            draft.ssh_connection_test_status,
+            SshConnectionTestStatus::Success("Connection successful.".into())
+        );
     }
 
     #[test]
