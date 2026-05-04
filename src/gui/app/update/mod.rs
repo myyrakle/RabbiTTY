@@ -15,7 +15,18 @@ pub(in crate::gui) static TAB_BAR_SCROLLABLE_ID: LazyLock<widget::Id> =
 pub(in crate::gui) static TERMINAL_SCROLLABLE_ID: LazyLock<widget::Id> =
     LazyLock::new(widget::Id::unique);
 
+const IGNORE_SCROLL_SYNC_COUNT: u8 = 2;
+
 impl App {
+    fn active_session_mut(&mut self) -> Option<&mut crate::gui::tab::TerminalTab> {
+        if self.active_tab == SETTINGS_TAB_INDEX {
+            return None;
+        }
+        self.tabs
+            .get_mut(self.active_tab)
+            .filter(|tab| matches!(tab.session, crate::gui::tab::TerminalSession::Active(_)))
+    }
+
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             // ── Tab management ──────────────────────────────────────
@@ -86,6 +97,7 @@ impl App {
             Message::SaveSshProfiles => {
                 self.settings_draft
                     .load_ssh_passwords_from_keychain(&self.config.ssh_profiles);
+
                 if let Err(err) = self
                     .settings_draft
                     .apply_ssh_profiles_to(&mut self.config.ssh_profiles)
@@ -175,14 +187,14 @@ impl App {
             }
             Message::PtyOutput(event) => {
                 self.handle_pty_event(event);
-                self.ignore_scrollable_sync = 2;
+                self.ignore_scrollable_sync = IGNORE_SCROLL_SYNC_COUNT;
                 return self.sync_terminal_scrollable();
             }
             Message::PtyOutputBatch(events) => {
                 for event in events {
                     self.handle_pty_event(event);
                 }
-                self.ignore_scrollable_sync = 2;
+                self.ignore_scrollable_sync = IGNORE_SCROLL_SYNC_COUNT;
                 return self.sync_terminal_scrollable();
             }
             Message::KeyPressed {
@@ -223,8 +235,7 @@ impl App {
             }
             Message::PasteClipboard(text) => {
                 if !text.is_empty()
-                    && self.active_tab != SETTINGS_TAB_INDEX
-                    && let Some(tab) = self.tabs.get_mut(self.active_tab)
+                    && let Some(tab) = self.active_session_mut()
                     && let crate::gui::tab::TerminalSession::Active(session) = &tab.session
                 {
                     let _ = session.send_bytes(text.as_bytes());
@@ -238,8 +249,7 @@ impl App {
             }
             Message::ImeCommit(text) => {
                 if !text.is_empty()
-                    && self.active_tab != SETTINGS_TAB_INDEX
-                    && let Some(tab) = self.tabs.get_mut(self.active_tab)
+                    && let Some(tab) = self.active_session_mut()
                     && let crate::gui::tab::TerminalSession::Active(session) = &tab.session
                 {
                     let _ = session.send_bytes(text.as_bytes());
@@ -247,7 +257,7 @@ impl App {
                 }
                 self.ime_preedit = None;
                 self.scroll_follow_bottom = true;
-                self.ignore_scrollable_sync = 2;
+                self.ignore_scrollable_sync = IGNORE_SCROLL_SYNC_COUNT;
                 return self.sync_terminal_scrollable();
             }
             Message::ImePreedit(text, cursor) => {
@@ -308,7 +318,7 @@ impl App {
                     .get(self.active_tab)
                     .is_some_and(|t| !t.mouse_mode() && !t.alt_screen())
                 {
-                    self.ignore_scrollable_sync = 2;
+                    self.ignore_scrollable_sync = IGNORE_SCROLL_SYNC_COUNT;
                     return self.sync_terminal_scrollable_forced();
                 }
             }
@@ -455,7 +465,7 @@ impl App {
             tab.handle_key(&key, modifiers, text.as_deref());
         }
         self.scroll_follow_bottom = true;
-        self.ignore_scrollable_sync = 2;
+        self.ignore_scrollable_sync = IGNORE_SCROLL_SYNC_COUNT;
         self.sync_terminal_scrollable()
     }
 
