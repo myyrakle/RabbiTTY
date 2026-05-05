@@ -141,7 +141,7 @@ pub async fn test_ssh_connection(
     timeout: std::time::Duration,
 ) -> Result<(), String> {
     match tokio::time::timeout(timeout, async move {
-        test_ssh_connection_inner(&mut profile, timeout).await
+        test_ssh_connection_inner(&mut profile).await
     })
     .await
     {
@@ -156,16 +156,12 @@ pub async fn test_ssh_connection(
 
 async fn test_ssh_connection_inner(
     profile: &mut SshProfile,
-    timeout: std::time::Duration,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if matches!(profile.auth_method, SshAuthMethod::Password) && profile.password.is_none() {
         profile.password = crate::keychain::get_password(&profile.host, &profile.user);
     }
 
-    let config = Arc::new(client::Config {
-        inactivity_timeout: Some(timeout),
-        ..<_>::default()
-    });
+    let config = Arc::new(interactive_ssh_config());
 
     let (fp_tx, _fp_rx) = tokio::sync::oneshot::channel();
     let handler = SshHandler {
@@ -265,10 +261,7 @@ async fn ssh_task(
     }
 
     // --- TCP + SSH handshake ---
-    let config = Arc::new(client::Config {
-        inactivity_timeout: Some(std::time::Duration::from_secs(30)),
-        ..<_>::default()
-    });
+    let config = Arc::new(interactive_ssh_config());
 
     let (fp_tx, fp_rx) = tokio::sync::oneshot::channel();
     let handler = SshHandler {
@@ -380,6 +373,15 @@ fn ssh_user(configured_user: &str) -> String {
     }
 }
 
+fn interactive_ssh_config() -> client::Config {
+    client::Config {
+        inactivity_timeout: None,
+        keepalive_interval: Some(std::time::Duration::from_secs(15)),
+        keepalive_max: 3,
+        ..<_>::default()
+    }
+}
+
 async fn authenticate_session<H: client::Handler>(
     session: &mut client::Handle<H>,
     profile: &SshProfile,
@@ -460,6 +462,18 @@ fn spawn_proxy_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interactive_ssh_config_does_not_close_idle_sessions() {
+        let config = interactive_ssh_config();
+
+        assert_eq!(config.inactivity_timeout, None);
+        assert_eq!(
+            config.keepalive_interval,
+            Some(std::time::Duration::from_secs(15))
+        );
+        assert_eq!(config.keepalive_max, 3);
+    }
 
     #[test]
     fn proxy_command_replaces_host_and_port_tokens() {
