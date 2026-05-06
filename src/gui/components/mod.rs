@@ -1,5 +1,6 @@
 pub mod button;
 pub mod container;
+pub mod ime_wrapper;
 pub mod tab_bar;
 
 use crate::gui::theme::Palette;

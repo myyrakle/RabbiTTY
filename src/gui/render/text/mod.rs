@@ -70,7 +70,7 @@ pub(super) struct TextPipelineData {
 
 impl TextPipelineData {
     pub(super) fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
-        let shader_src = include_str!("../../terminal.wgsl");
+        let shader_src = include_str!("../shaders/terminal.wgsl");
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("terminal.text.wgsl"),
             source: wgpu::ShaderSource::Wgsl(shader_src.into()),

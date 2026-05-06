@@ -7,6 +7,7 @@ mod shell_picker;
 pub(in crate::gui) use dialog::{DialogButton, confirm_dialog};
 
 use super::{App, Message, SETTINGS_TAB_INDEX};
+use crate::gui::components::ime_wrapper::ImeEnabled;
 use crate::gui::components::{button_secondary, panel, tab_bar};
 use crate::gui::render::TerminalProgram;
 use iced::widget::{column, container, image, row, scrollable, stack, text};
@@ -140,7 +141,7 @@ impl App {
         .height(Length::Fill);
 
         let (_scroll_offset, scroll_history) = active_tab.scroll_position();
-        if scroll_history > 0 {
+        let terminal_view: Element<Message> = if scroll_history > 0 {
             let cell_height = self.config.terminal.cell_height.max(1.0);
             let content_height = (scroll_history + dims.lines) as f32 * cell_height;
             let scroll_content = container("")
@@ -152,6 +153,7 @@ impl App {
                 .direction(scrollable::Direction::Vertical(
                     scrollable::Scrollbar::new().width(8).scroller_width(8),
                 ))
+                .anchor_bottom()
                 .on_scroll(|viewport: scrollable::Viewport| {
                     let rel = viewport.relative_offset();
                     Message::TerminalScroll(rel.y)
@@ -169,6 +171,10 @@ impl App {
             .into()
         } else {
             terminal_widget.into()
-        }
+        };
+
+        ImeEnabled::new(terminal_view)
+            .preedit(self.ime_preedit.clone())
+            .into()
     }
 }

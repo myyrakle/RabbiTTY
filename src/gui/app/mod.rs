@@ -74,6 +74,9 @@ pub enum Message {
         row: usize,
     },
     PasteClipboard(String),
+    ImeStateChanged(bool),
+    ImeCommit(String),
+    ImePreedit(String, Option<std::ops::Range<usize>>),
     TerminalScroll(f32),
     TerminalWheelScroll(f32),
 
@@ -111,7 +114,8 @@ pub struct App {
     pub(super) pty_sender: Option<mpsc::UnboundedSender<OutputEvent>>,
     pub(super) next_tab_id: u64,
     pub(super) tab_bar_scroll_x: f32,
-    pub(super) ignore_scrollable_sync: bool,
+    pub(super) ignore_scrollable_sync: u8,
+    pub(super) scroll_follow_bottom: bool,
     pub(super) dragging_tab: Option<usize>,
     pub(super) drag_target: Option<usize>,
     pub(super) scroll_accumulator: f32,
@@ -120,6 +124,8 @@ pub struct App {
     pub(super) resize_debounce_spawned_seq: u64,
     pub(super) shell_picker_anim: Animation<bool>,
     pub(super) palette: crate::gui::theme::Palette,
+    pub(super) ime_active: bool,
+    pub(super) ime_preedit: Option<(String, Option<std::ops::Range<usize>>)>,
     pub(super) window_style_applied: bool,
     #[cfg(target_os = "macos")]
     pub(super) show_restart_confirm: bool,
@@ -156,7 +162,8 @@ impl App {
             pty_sender: None,
             next_tab_id: 1,
             tab_bar_scroll_x: 0.0,
-            ignore_scrollable_sync: false,
+            ignore_scrollable_sync: 0,
+            scroll_follow_bottom: true,
             dragging_tab: None,
             drag_target: None,
             scroll_accumulator: 0.0,
@@ -164,6 +171,8 @@ impl App {
             resize_debounce_seq: 0,
             resize_debounce_spawned_seq: 0,
             palette,
+            ime_active: false,
+            ime_preedit: None,
             shell_picker_anim: Animation::new(false)
                 .duration(std::time::Duration::from_millis(250))
                 .easing(iced::animation::Easing::EaseOutQuint),

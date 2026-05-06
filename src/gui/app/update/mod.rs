@@ -15,7 +15,18 @@ pub(in crate::gui) static TAB_BAR_SCROLLABLE_ID: LazyLock<widget::Id> =
 pub(in crate::gui) static TERMINAL_SCROLLABLE_ID: LazyLock<widget::Id> =
     LazyLock::new(widget::Id::unique);
 
+const IGNORE_SCROLL_SYNC_COUNT: u8 = 2;
+
 impl App {
+    fn active_session_mut(&mut self) -> Option<&mut crate::gui::tab::TerminalTab> {
+        if self.active_tab == SETTINGS_TAB_INDEX {
+            return None;
+        }
+        self.tabs
+            .get_mut(self.active_tab)
+            .filter(|tab| matches!(tab.session, crate::gui::tab::TerminalSession::Active(_)))
+    }
+
     fn save_ssh_profiles(&mut self) {
         self.settings_draft
             .load_ssh_passwords_from_keychain(&self.config.ssh_profiles);
@@ -214,14 +225,14 @@ impl App {
             }
             Message::PtyOutput(event) => {
                 self.handle_pty_event(event);
-                self.ignore_scrollable_sync = true;
+                self.ignore_scrollable_sync = IGNORE_SCROLL_SYNC_COUNT;
                 return self.sync_terminal_scrollable();
             }
             Message::PtyOutputBatch(events) => {
                 for event in events {
                     self.handle_pty_event(event);
                 }
-                self.ignore_scrollable_sync = true;
+                self.ignore_scrollable_sync = IGNORE_SCROLL_SYNC_COUNT;
                 return self.sync_terminal_scrollable();
             }
             Message::KeyPressed {
@@ -262,20 +273,49 @@ impl App {
             }
             Message::PasteClipboard(text) => {
                 if !text.is_empty()
-                    && self.active_tab != SETTINGS_TAB_INDEX
-                    && let Some(tab) = self.tabs.get_mut(self.active_tab)
+                    && let Some(tab) = self.active_session_mut()
                     && let crate::gui::tab::TerminalSession::Active(session) = &tab.session
                 {
                     let _ = session.send_bytes(text.as_bytes());
                 }
             }
+            Message::ImeStateChanged(active) => {
+                self.ime_active = active;
+                if !active {
+                    self.ime_preedit = None;
+                }
+            }
+            Message::ImeCommit(text) => {
+                if !text.is_empty()
+                    && let Some(tab) = self.active_session_mut()
+                    && let crate::gui::tab::TerminalSession::Active(session) = &tab.session
+                {
+                    let _ = session.send_bytes(text.as_bytes());
+                    tab.clear_selection();
+                }
+                self.ime_preedit = None;
+                self.scroll_follow_bottom = true;
+                self.ignore_scrollable_sync = IGNORE_SCROLL_SYNC_COUNT;
+                return self.sync_terminal_scrollable();
+            }
+            Message::ImePreedit(text, cursor) => {
+                if text.is_empty() {
+                    self.ime_preedit = None;
+                } else {
+                    self.ime_preedit = Some((text, cursor));
+                }
+            }
             Message::TerminalScroll(rel_y) => {
-                if self.ignore_scrollable_sync {
-                    self.ignore_scrollable_sync = false;
+                if self.ignore_scrollable_sync > 0 {
+                    self.ignore_scrollable_sync -= 1;
                 } else if self.active_tab != SETTINGS_TAB_INDEX
                     && let Some(tab) = self.tabs.get_mut(self.active_tab)
                 {
-                    tab.scroll_to_relative(rel_y);
+                    // With anchor_bottom: rel_y=0 is bottom, rel_y=1 is top.
+                    // scroll_to_relative expects rel=1.0 as bottom, rel=0.0 as top.
+                    tab.scroll_to_relative(1.0 - rel_y);
+                    let (offset, _) = tab.scroll_position();
+                    self.scroll_follow_bottom = offset == 0;
                 }
             }
             Message::TerminalWheelScroll(raw_delta) => {
@@ -306,6 +346,9 @@ impl App {
                         if delta != 0 {
                             tab.scroll(delta);
                         }
+                        // Update follow-bottom based on resulting position
+                        let (offset, _) = tab.scroll_position();
+                        self.scroll_follow_bottom = offset == 0;
                     }
                 }
                 if self
@@ -313,7 +356,7 @@ impl App {
                     .get(self.active_tab)
                     .is_some_and(|t| !t.mouse_mode() && !t.alt_screen())
                 {
-                    self.ignore_scrollable_sync = true;
+                    self.ignore_scrollable_sync = IGNORE_SCROLL_SYNC_COUNT;
                     return self.sync_terminal_scrollable_forced();
                 }
             }
@@ -450,12 +493,17 @@ impl App {
             return Task::none();
         }
 
+        if self.ime_active && matches!(key, Key::Character(_)) && !modifiers.control() {
+            return Task::none();
+        }
+
         // Clear selection on actual key input
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
             tab.clear_selection();
             tab.handle_key(&key, modifiers, text.as_deref());
         }
-        self.ignore_scrollable_sync = true;
+        self.scroll_follow_bottom = true;
+        self.ignore_scrollable_sync = IGNORE_SCROLL_SYNC_COUNT;
         self.sync_terminal_scrollable()
     }
 

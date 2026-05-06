@@ -1,4 +1,5 @@
 use super::{App, Message};
+use iced::advanced::input_method;
 use iced::futures::StreamExt;
 use iced::futures::channel::mpsc;
 use iced::futures::sink::SinkExt;
@@ -43,7 +44,7 @@ impl App {
                     }
                 })
             }),
-            event::listen_with(|event, _status, _id| match event {
+            event::listen_with(|event, status, _id| match event {
                 Event::Window(window::Event::CloseRequested) => Some(Message::Exit),
                 Event::Window(window::Event::Resized(size)) => Some(Message::WindowResized(size)),
                 Event::Keyboard(keyboard::Event::KeyPressed {
@@ -56,10 +57,24 @@ impl App {
                     modifiers,
                     text: text.map(|s| s.to_string()),
                 }),
+                Event::InputMethod(input_method::Event::Opened) => {
+                    Some(Message::ImeStateChanged(true))
+                }
+                Event::InputMethod(input_method::Event::Closed) => {
+                    Some(Message::ImeStateChanged(false))
+                }
+                Event::InputMethod(input_method::Event::Commit(text)) => {
+                    Some(Message::ImeCommit(text))
+                }
+                Event::InputMethod(input_method::Event::Preedit(text, cursor)) => {
+                    Some(Message::ImePreedit(text, cursor))
+                }
                 Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                     Some(Message::TabDragRelease)
                 }
-                Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+                Event::Mouse(mouse::Event::WheelScrolled { delta })
+                    if !matches!(status, event::Status::Captured) =>
+                {
                     let (lines_y, pixels_x) = match delta {
                         mouse::ScrollDelta::Lines { x, y } => (y, x * 30.0),
                         mouse::ScrollDelta::Pixels { x, y } => (y / 20.0, x),
