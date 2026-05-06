@@ -1,5 +1,6 @@
 use super::super::shortcuts::ShortcutAction;
 use super::super::{App, Message, SETTINGS_TAB_INDEX};
+use crate::config::SshProfile;
 use crate::gui::settings::SettingsDraft;
 use crate::gui::tab::ShellKind;
 use crate::terminal::TerminalTheme;
@@ -47,7 +48,23 @@ impl App {
     }
 
     pub(in crate::gui) fn shell_picker_option_count(&self) -> usize {
-        self.available_shells.len() + self.config.ssh_profiles.len()
+        self.available_shells.len() + self.session_ssh_profiles().len()
+    }
+
+    pub(in crate::gui) fn session_ssh_profiles(&self) -> Vec<SshProfile> {
+        if self.settings_open {
+            let draft_profiles: Vec<SshProfile> = self
+                .settings_draft
+                .ssh_profiles
+                .iter()
+                .filter_map(|profile| profile.to_profile())
+                .collect();
+            if !draft_profiles.is_empty() {
+                return draft_profiles;
+            }
+        }
+
+        self.config.ssh_profiles.clone()
     }
 
     pub(super) fn shift_shell_picker_selection(&mut self, delta: isize) {
@@ -62,17 +79,17 @@ impl App {
 
     pub(super) fn confirm_shell_picker_selection(&mut self) -> Task<Message> {
         let selected = self.shell_picker_selected;
-        let shell_count = self.available_shells.len();
+        let ssh_profiles = self.session_ssh_profiles();
 
-        if selected < shell_count {
-            let shell = self.available_shells[selected].clone();
-            return self.create_tab(shell);
+        if selected < ssh_profiles.len() {
+            let profile = ssh_profiles[selected].clone();
+            return self.create_tab(crate::gui::tab::ShellKind::Ssh(profile));
         }
 
-        let ssh_index = selected - shell_count;
-        if ssh_index < self.config.ssh_profiles.len() {
-            let profile = self.config.ssh_profiles[ssh_index].clone();
-            return self.create_tab(crate::gui::tab::ShellKind::Ssh(profile));
+        let shell_index = selected - ssh_profiles.len();
+        if shell_index < self.available_shells.len() {
+            let shell = self.available_shells[shell_index].clone();
+            return self.create_tab(shell);
         }
 
         self.show_shell_picker = false;

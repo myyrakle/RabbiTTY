@@ -85,18 +85,27 @@ impl App {
         .align_y(iced::Alignment::Center)
         .spacing(SPACING_SMALL);
 
-        let header = row![
-            breadcrumb,
-            container("").width(Length::Fill),
+        let header: Element<Message> = if matches!(self.settings_category, SettingsCategory::Ssh) {
+            row![breadcrumb, container("").width(Length::Fill),]
+                .align_y(iced::Alignment::Center)
+                .spacing(SPACING_NORMAL)
+                .width(Length::Fill)
+                .into()
+        } else {
             row![
-                button_secondary("Apply", palette).on_press(Message::ApplySettings),
-                button_primary("Save", palette).on_press(Message::SaveSettings),
+                breadcrumb,
+                container("").width(Length::Fill),
+                row![
+                    button_secondary("Apply", palette).on_press(Message::ApplySettings),
+                    button_primary("Save", palette).on_press(Message::SaveSettings),
+                ]
+                .spacing(SPACING_SMALL)
             ]
-            .spacing(SPACING_SMALL)
-        ]
-        .align_y(iced::Alignment::Center)
-        .spacing(SPACING_NORMAL)
-        .width(Length::Fill);
+            .align_y(iced::Alignment::Center)
+            .spacing(SPACING_NORMAL)
+            .width(Length::Fill)
+            .into()
+        };
 
         let body_content = container(settings::view_category(
             self.settings_category,
@@ -115,7 +124,7 @@ impl App {
             .width(Length::Fill);
 
         let content = container(
-            column(vec![header.into(), body.into()])
+            column(vec![header, body.into()])
                 .spacing(SPACING_NORMAL)
                 .height(Length::Fill)
                 .width(Length::Fill),
@@ -124,10 +133,16 @@ impl App {
         .height(Length::Fill)
         .padding(SPACING_LARGE);
 
-        row![sidebar, content]
+        let settings_layout: Element<Message> = row![sidebar, content]
             .spacing(SPACING_LARGE)
             .height(Length::Fill)
             .width(Length::Fill)
-            .into()
+            .into();
+
+        if matches!(self.settings_category, SettingsCategory::Ssh) {
+            settings::ssh::modal_overlay(settings_layout, &self.settings_draft, palette)
+        } else {
+            settings_layout
+        }
     }
 }

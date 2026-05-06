@@ -20,6 +20,7 @@ pub(super) const SETTINGS_TAB_INDEX: usize = usize::MAX;
 
 #[derive(Clone)]
 pub enum Message {
+    Noop,
     TabSelected(usize),
     TabDragHover(usize),
     TabDragRelease,
@@ -34,9 +35,15 @@ pub enum Message {
     ApplySettings,
     SaveSettings,
     AddSshProfile,
-    RemoveSshProfile(usize),
-    SshProfileFieldChanged(usize, SshProfileField, String),
-    SaveSshProfiles,
+    EditSshProfile(usize),
+    RequestRemoveSshProfile(usize),
+    CancelRemoveSshProfile,
+    ConfirmRemoveSshProfile,
+    SshProfileModalFieldChanged(SshProfileField, String),
+    TestSshConnection,
+    SshConnectionTestFinished(Result<(), String>),
+    CloseSshProfileModal,
+    SaveSshProfileModal,
     CreateSshTab(usize),
     #[cfg(target_os = "macos")]
     ConfirmRestartForBlur,

@@ -16,8 +16,44 @@ pub(in crate::gui) static TERMINAL_SCROLLABLE_ID: LazyLock<widget::Id> =
     LazyLock::new(widget::Id::unique);
 
 impl App {
+    fn save_ssh_profiles(&mut self) {
+        self.settings_draft
+            .load_ssh_passwords_from_keychain(&self.config.ssh_profiles);
+        if let Err(err) = self
+            .settings_draft
+            .apply_ssh_profiles_to(&mut self.config.ssh_profiles)
+        {
+            eprintln!("Failed to save SSH profiles: {err}");
+            return;
+        }
+
+        for profile in &self.config.ssh_profiles {
+            if let Some(ref pw) = profile.password {
+                crate::keychain::set_password(&profile.host, &profile.user, pw);
+            } else {
+                crate::keychain::delete_password(&profile.host, &profile.user);
+            }
+        }
+
+        match self.config.save() {
+            Ok(()) => {
+                self.settings_draft = SettingsDraft::from_config(&self.config);
+                self.settings_draft
+                    .load_ssh_passwords_from_keychain(&self.config.ssh_profiles);
+                self.settings_draft.set_ssh_profiles_saved();
+            }
+            Err(err) => {
+                let message = format!("Failed to save SSH profiles: {err}");
+                eprintln!("{message}");
+                self.settings_draft.set_ssh_profiles_error(message);
+            }
+        }
+    }
+
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::Noop => {}
+
             // ── Tab management ──────────────────────────────────────
             Message::TabSelected(index) => {
                 if index == SETTINGS_TAB_INDEX && self.settings_open {
@@ -67,7 +103,7 @@ impl App {
                 return self.create_tab(shell);
             }
             Message::CreateSshTab(profile_index) => {
-                if let Some(profile) = self.config.ssh_profiles.get(profile_index) {
+                if let Some(profile) = self.session_ssh_profiles().get(profile_index) {
                     let shell = ShellKind::Ssh(profile.clone());
                     return self.create_tab(shell);
                 }
@@ -75,44 +111,47 @@ impl App {
 
             // ── Settings ────────────────────────────────────────────
             Message::AddSshProfile => {
-                self.settings_draft.add_ssh_profile();
+                self.settings_draft.open_create_ssh_profile_modal();
             }
-            Message::RemoveSshProfile(index) => {
-                self.settings_draft.remove_ssh_profile(index);
+            Message::EditSshProfile(index) => {
+                self.settings_draft.open_edit_ssh_profile_modal(index);
             }
-            Message::SshProfileFieldChanged(index, field, value) => {
-                self.settings_draft.update_ssh_profile(index, field, value);
+            Message::RequestRemoveSshProfile(index) => {
+                self.settings_draft.request_delete_ssh_profile(index);
             }
-            Message::SaveSshProfiles => {
-                self.settings_draft
-                    .load_ssh_passwords_from_keychain(&self.config.ssh_profiles);
-                if let Err(err) = self
-                    .settings_draft
-                    .apply_ssh_profiles_to(&mut self.config.ssh_profiles)
-                {
-                    eprintln!("Failed to save SSH profiles: {err}");
-                    return Task::none();
-                }
-                // Save passwords to OS keychain (not in config file)
-                for profile in &self.config.ssh_profiles {
-                    if let Some(ref pw) = profile.password {
-                        crate::keychain::set_password(&profile.host, &profile.user, pw);
-                    } else {
-                        crate::keychain::delete_password(&profile.host, &profile.user);
-                    }
-                }
-                match self.config.save() {
-                    Ok(()) => {
-                        self.settings_draft = SettingsDraft::from_config(&self.config);
-                        self.settings_draft.set_ssh_profiles_saved();
-                    }
-                    Err(err) => {
-                        let message = format!("Failed to save SSH profiles: {err}");
-                        eprintln!("{message}");
-                        self.settings_draft.set_ssh_profiles_error(message);
-                    }
+            Message::CancelRemoveSshProfile => {
+                self.settings_draft.cancel_delete_ssh_profile();
+            }
+            Message::ConfirmRemoveSshProfile => {
+                if let Some((host, user)) = self.settings_draft.confirm_delete_ssh_profile() {
+                    crate::keychain::delete_password(&host, &user);
+                    self.save_ssh_profiles();
                 }
             }
+            Message::SshProfileModalFieldChanged(field, value) => {
+                self.settings_draft.update_ssh_profile_modal(field, value);
+            }
+            Message::TestSshConnection => match self.settings_draft.begin_ssh_connection_test() {
+                Ok(profile) => {
+                    return Task::perform(
+                        crate::ssh::test_ssh_connection(profile, std::time::Duration::from_secs(5)),
+                        Message::SshConnectionTestFinished,
+                    );
+                }
+                Err(err) => {
+                    eprintln!("Failed to start SSH connection test: {err}");
+                }
+            },
+            Message::SshConnectionTestFinished(result) => {
+                self.settings_draft.finish_ssh_connection_test(result);
+            }
+            Message::CloseSshProfileModal => {
+                self.settings_draft.close_ssh_profile_modal();
+            }
+            Message::SaveSshProfileModal => match self.settings_draft.save_ssh_profile_modal() {
+                Ok(()) => self.save_ssh_profiles(),
+                Err(err) => eprintln!("Failed to update SSH profile draft: {err}"),
+            },
             Message::OpenSettingsTab => {
                 self.settings_open = true;
                 self.active_tab = SETTINGS_TAB_INDEX;
