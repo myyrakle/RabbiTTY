@@ -2,7 +2,7 @@ use super::super::{App, Message};
 use crate::gui::tab::ShellKind;
 use crate::gui::theme::{Palette, RADIUS_NORMAL, RADIUS_SMALL, SPACING_SMALL};
 use iced::time::Instant;
-use iced::widget::{button, column, container, mouse_area, stack, text};
+use iced::widget::{button, column, container, mouse_area, scrollable, stack, text};
 use iced::{Background, Border, Color, Element, Length};
 
 const PICKER_WIDTH: f32 = 280.0;
@@ -50,34 +50,12 @@ impl App {
         );
         items.push(divider_with_alpha(progress, palette));
 
-        // Shell section
-        items.push(section_label("Shells", progress, palette));
-
-        for shell in &self.available_shells {
-            let label = shell.display_name();
-            let subtitle = match shell {
-                ShellKind::Default => Some("Default".into()),
-                ShellKind::Shell { path, .. } => Some(path.clone()),
-                ShellKind::Ssh(_) => None,
-            };
-            let selected = self.shell_picker_selected == option_index;
-            items.push(picker_item(
-                label,
-                subtitle,
-                selected,
-                Message::CreateTab(shell.clone()),
-                progress,
-                palette,
-            ));
-            option_index += 1;
-        }
-
-        // SSH section
-        if !self.config.ssh_profiles.is_empty() {
-            items.push(divider_with_alpha(progress, palette));
+        // SSH section first: profiles should be visible without scrolling past system shells.
+        let ssh_profiles = self.session_ssh_profiles();
+        if !ssh_profiles.is_empty() {
             items.push(section_label("SSH", progress, palette));
 
-            for (i, profile) in self.config.ssh_profiles.iter().enumerate() {
+            for (i, profile) in ssh_profiles.iter().enumerate() {
                 let label = if profile.name.is_empty() {
                     profile.host.clone()
                 } else {
@@ -102,34 +80,61 @@ impl App {
                 ));
                 option_index += 1;
             }
+            items.push(divider_with_alpha(progress, palette));
+        }
+
+        // Shell section
+        items.push(section_label("Shells", progress, palette));
+
+        for shell in &self.available_shells {
+            let label = shell.display_name();
+            let subtitle = match shell {
+                ShellKind::Default => Some("Default".into()),
+                ShellKind::Shell { path, .. } => Some(path.clone()),
+                ShellKind::Ssh(_) => None,
+            };
+            let selected = self.shell_picker_selected == option_index;
+            items.push(picker_item(
+                label,
+                subtitle,
+                selected,
+                Message::CreateTab(shell.clone()),
+                progress,
+                palette,
+            ));
+            option_index += 1;
         }
 
         let card_alpha = 0.98 * progress;
         let border_alpha = 0.15 * progress;
 
-        let popup_card = container(
+        let picker_list = scrollable(
             column(items)
                 .spacing(SPACING_SMALL)
                 .padding([16, 12])
                 .width(Length::Fixed(PICKER_WIDTH)),
         )
-        .style(move |_theme: &iced::Theme| container::Style {
-            background: Some(Background::Color(Color {
-                r: palette.surface.r * 0.9,
-                g: palette.surface.g * 0.9,
-                b: palette.surface.b * 0.9,
-                a: card_alpha,
-            })),
-            border: Border {
-                radius: (RADIUS_NORMAL + 4.0).into(),
-                width: 1.0,
-                color: Color {
-                    a: border_alpha,
-                    ..palette.text
+        .height(Length::Fixed(460.0))
+        .width(Length::Fixed(PICKER_WIDTH));
+
+        let popup_card =
+            container(picker_list).style(move |_theme: &iced::Theme| container::Style {
+                background: Some(Background::Color(Color {
+                    r: palette.surface.r * 0.9,
+                    g: palette.surface.g * 0.9,
+                    b: palette.surface.b * 0.9,
+                    a: card_alpha,
+                })),
+                border: Border {
+                    radius: (RADIUS_NORMAL + 4.0).into(),
+                    width: 1.0,
+                    color: Color {
+                        a: border_alpha,
+                        ..palette.text
+                    },
                 },
-            },
-            ..Default::default()
-        });
+                ..Default::default()
+            });
 
         // Slide up: start 16px below center, ease to 0
         let slide_offset = 16.0 * (1.0 - progress);
