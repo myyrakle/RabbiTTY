@@ -493,7 +493,7 @@ impl App {
             return Task::none();
         }
 
-        if self.ime_active && matches!(key, Key::Character(_)) && !modifiers.control() {
+        if self.ime_preedit.is_some() && matches!(key, Key::Character(_)) && !modifiers.control() {
             return Task::none();
         }
 
