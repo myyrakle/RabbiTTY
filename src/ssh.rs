@@ -268,6 +268,8 @@ async fn ssh_task(
         fingerprint_tx: Some(fp_tx),
     };
 
+    let connect_timeout = std::time::Duration::from_secs(15);
+
     let mut session = if let Some(ref proxy_command) = profile.proxy_command {
         send_status(
             output_tx,
@@ -275,10 +277,16 @@ async fn ssh_task(
             &format!("         {}\r\n", ansi::cyan("Using ProxyCommand")),
         );
         let stream = spawn_proxy_command(proxy_command, &profile.host, profile.port)?;
-        client::connect_stream(config, stream, handler).await?
+        match tokio::time::timeout(connect_timeout, client::connect_stream(config, stream, handler)).await {
+            Ok(result) => result?,
+            Err(_) => return Err("Connection timed out (15s).".into()),
+        }
     } else {
         let addr = format!("{}:{}", profile.host, profile.port);
-        client::connect(config, &*addr, handler).await?
+        match tokio::time::timeout(connect_timeout, client::connect(config, &*addr, handler)).await {
+            Ok(result) => result?,
+            Err(_) => return Err("Connection timed out (15s).".into()),
+        }
     };
 
     // Display host key fingerprint
@@ -304,7 +312,11 @@ async fn ssh_task(
 
     let user = ssh_user(&profile.user);
 
-    let authenticated = authenticate_session(&mut session, &profile, &user).await?;
+    let auth_timeout = std::time::Duration::from_secs(15);
+    let authenticated = match tokio::time::timeout(auth_timeout, authenticate_session(&mut session, &profile, &user)).await {
+        Ok(result) => result?,
+        Err(_) => return Err("Authentication timed out (15s).".into()),
+    };
 
     if !authenticated {
         return Err("Authentication failed".into());
