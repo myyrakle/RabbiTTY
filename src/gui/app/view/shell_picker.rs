@@ -115,7 +115,53 @@ impl App {
                 .width(Length::Fixed(PICKER_WIDTH)),
         )
         .height(Length::Fixed(460.0))
-        .width(Length::Fixed(PICKER_WIDTH));
+        .width(Length::Fixed(PICKER_WIDTH))
+        .style(move |_theme: &iced::Theme, status: scrollable::Status| {
+            use iced::widget::container;
+            use iced::widget::scrollable::{AutoScroll, Rail, Scroller, Style};
+            use iced::{Background, Border, Shadow};
+
+            let scroller_alpha = match status {
+                scrollable::Status::Active { .. } => 0.45,
+                scrollable::Status::Hovered { .. } => 0.65,
+                scrollable::Status::Dragged { .. } => 0.8,
+            } * progress;
+
+            let rail = |visible: bool| Rail {
+                background: Some(Background::Color(if visible {
+                    Color {
+                        a: 0.08 * progress,
+                        ..palette.surface
+                    }
+                } else {
+                    Color::TRANSPARENT
+                })),
+                border: Border::default(),
+                scroller: Scroller {
+                    background: Background::Color(Color {
+                        a: if visible { scroller_alpha } else { 0.0 },
+                        ..palette.text_secondary
+                    }),
+                    border: Border {
+                        radius: RADIUS_SMALL.into(),
+                        ..Default::default()
+                    },
+                },
+            };
+
+            Style {
+                container: container::Style::default(),
+                vertical_rail: rail(true),
+                horizontal_rail: rail(false),
+                gap: None,
+                auto_scroll: AutoScroll {
+                    background: Background::Color(Color::TRANSPARENT),
+                    border: Border::default(),
+                    shadow: Shadow::default(),
+                    icon: Color::TRANSPARENT,
+                },
+            }
+        });
 
         let popup_card =
             container(picker_list).style(move |_theme: &iced::Theme| container::Style {
