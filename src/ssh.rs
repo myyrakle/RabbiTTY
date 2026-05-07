@@ -117,8 +117,9 @@ pub fn spawn_ssh_session(
     let (initial_write_tx, _) = tokio_mpsc::unbounded_channel::<Vec<u8>>();
     let (resize_tx, _) = tokio_mpsc::unbounded_channel::<(u16, u16)>();
 
-    let writer: Arc<Mutex<Box<dyn Write + Send>>> =
-        Arc::new(Mutex::new(Box::new(SshWriter { tx: initial_write_tx })));
+    let writer: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(Box::new(SshWriter {
+        tx: initial_write_tx,
+    })));
     let writer_handle = Arc::clone(&writer);
 
     tokio::spawn(async move {
@@ -130,7 +131,9 @@ pub fn spawn_ssh_session(
             let (_, attempt_resize_rx) = tokio_mpsc::unbounded_channel();
 
             if let Ok(mut guard) = writer_handle.lock() {
-                *guard = Box::new(SshWriter { tx: attempt_write_tx });
+                *guard = Box::new(SshWriter {
+                    tx: attempt_write_tx,
+                });
             }
 
             match ssh_task(
