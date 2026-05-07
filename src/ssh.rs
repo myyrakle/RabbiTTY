@@ -114,8 +114,8 @@ pub fn spawn_ssh_session(
     cols: u16,
     output_tx: futures_mpsc::UnboundedSender<OutputEvent>,
 ) -> SshSessionHandle {
-    let (initial_write_tx, _) = tokio_mpsc::unbounded_channel::<Vec<u8>>();
-    let (resize_tx, _) = tokio_mpsc::unbounded_channel::<(u16, u16)>();
+    let (initial_write_tx, _initial_write_rx) = tokio_mpsc::unbounded_channel::<Vec<u8>>();
+    let (resize_tx, resize_rx) = tokio_mpsc::unbounded_channel::<(u16, u16)>();
 
     let writer: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(Box::new(SshWriter {
         tx: initial_write_tx,
@@ -125,10 +125,10 @@ pub fn spawn_ssh_session(
     tokio::spawn(async move {
         let mut otx = output_tx;
         let badge = ssh_badge();
+        let mut resize_rx = resize_rx;
 
         loop {
             let (attempt_write_tx, attempt_write_rx) = tokio_mpsc::unbounded_channel();
-            let (_, attempt_resize_rx) = tokio_mpsc::unbounded_channel();
 
             if let Ok(mut guard) = writer_handle.lock() {
                 *guard = Box::new(SshWriter {
@@ -142,7 +142,7 @@ pub fn spawn_ssh_session(
                 rows,
                 cols,
                 attempt_write_rx,
-                attempt_resize_rx,
+                &mut resize_rx,
                 &mut otx,
             )
             .await
@@ -245,7 +245,7 @@ async fn ssh_task(
     rows: u16,
     cols: u16,
     mut write_rx: tokio_mpsc::UnboundedReceiver<Vec<u8>>,
-    mut resize_rx: tokio_mpsc::UnboundedReceiver<(u16, u16)>,
+    resize_rx: &mut tokio_mpsc::UnboundedReceiver<(u16, u16)>,
     output_tx: &mut futures_mpsc::UnboundedSender<OutputEvent>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let badge = ssh_badge();
