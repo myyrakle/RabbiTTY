@@ -221,12 +221,12 @@ impl App {
         let mut items: Vec<Element<Message>> = Vec::new();
         let mut option_index = 0usize;
 
-        items.push(style.text("Start New Session", 15.0));
+        items.push(style.text(t!("shell_picker.title"), 15.0));
         items.push(style.divider());
 
         let ssh_profiles = self.session_ssh_profiles();
         if !ssh_profiles.is_empty() {
-            items.push(style.text_secondary("SSH", 11.0));
+            items.push(style.text_secondary(t!("shell_picker.ssh"), 11.0));
 
             for (i, profile) in ssh_profiles.iter().enumerate() {
                 let label = if profile.name.is_empty() {
@@ -258,12 +258,12 @@ impl App {
             items.push(style.divider());
         }
 
-        items.push(style.text_secondary("Shells", 11.0));
+        items.push(style.text_secondary(t!("shell_picker.shells"), 11.0));
 
         for shell in &self.available_shells {
             let label = shell.display_name();
             let subtitle = match shell {
-                ShellKind::Default => Some("Default".into()),
+                ShellKind::Default => Some(t!("shell_picker.default").into()),
                 ShellKind::Shell { path, .. } => Some(path.clone()),
                 ShellKind::Ssh(_) => None,
             };
