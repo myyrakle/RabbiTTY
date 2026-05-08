@@ -127,10 +127,21 @@ impl App {
                 }
             }
             Message::DuplicateTab => {
-                if let Some(tab) = self.tabs.get(self.active_tab) {
+                let index = self.tab_context_menu.unwrap_or(self.active_tab);
+                self.tab_context_menu = None;
+                if let Some(tab) = self.tabs.get(index) {
                     let shell = tab.shell.clone();
                     return self.create_tab(shell);
                 }
+            }
+            Message::ShowTabContextMenu(index) => {
+                self.tab_context_menu = Some(index);
+            }
+            Message::CloseTabContextMenu => {
+                self.tab_context_menu = None;
+            }
+            Message::CursorMoved(point) => {
+                self.cursor_position = point;
             }
 
             // ── Settings ────────────────────────────────────────────

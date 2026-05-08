@@ -7,6 +7,7 @@ mod shell_picker;
 pub(in crate::gui) use dialog::{DialogButton, confirm_dialog};
 
 use super::{App, Message, SETTINGS_TAB_INDEX};
+use crate::gui::components::context_menu::{ContextMenuItem, context_menu};
 use crate::gui::components::ime_wrapper::ImeEnabled;
 use crate::gui::components::{button_secondary, panel, tab_bar};
 use crate::gui::render::TerminalProgram;
@@ -95,6 +96,10 @@ impl App {
 
         if self.show_shell_picker {
             return self.view_shell_picker(base_layout);
+        }
+
+        if let Some(tab_index) = self.tab_context_menu {
+            return self.view_tab_context_menu(base_layout, tab_index);
         }
 
         base_layout.into()
@@ -262,5 +267,28 @@ impl App {
         )
         .center(Length::Fill)
         .into()
+    }
+
+    fn view_tab_context_menu<'a>(
+        &'a self,
+        base_layout: impl Into<Element<'a, Message>>,
+        tab_index: usize,
+    ) -> Element<'a, Message> {
+        context_menu(
+            base_layout,
+            vec![
+                ContextMenuItem {
+                    label: "복제",
+                    message: Message::DuplicateTab,
+                },
+                ContextMenuItem {
+                    label: "닫기",
+                    message: Message::CloseTab(tab_index),
+                },
+            ],
+            self.cursor_position,
+            Message::CloseTabContextMenu,
+            self.palette,
+        )
     }
 }

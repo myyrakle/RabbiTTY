@@ -44,6 +44,8 @@ pub fn tab_bar<'a>(
         let tab_item = mouse_area(tab_item)
             .on_press(Message::TabSelected(index))
             .on_enter(Message::TabDragHover(index))
+            .on_right_press(Message::ShowTabContextMenu(index))
+            .on_move(move |p| Message::CursorMoved(p))
             .into();
         tab_elements.push(tab_item);
     }
