@@ -100,6 +100,7 @@ impl App {
                 self.drag_target = None;
             }
             Message::CloseTab(index) => {
+                self.tab_context_menu = None;
                 self.handle_close_tab(index);
             }
             Message::OpenShellPicker => {
@@ -141,7 +142,9 @@ impl App {
                 self.tab_context_menu = None;
             }
             Message::CursorMoved(point) => {
-                self.cursor_position = point;
+                if self.tab_context_menu.is_none() {
+                    self.cursor_position = point;
+                }
             }
 
             // ── Settings ────────────────────────────────────────────
