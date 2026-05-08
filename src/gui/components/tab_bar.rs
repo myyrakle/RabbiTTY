@@ -41,11 +41,16 @@ pub fn tab_bar<'a>(
         }
 
         let tab_item = browser_tab(title, index, is_active, tab_alpha, palette);
-        let tab_item = mouse_area(tab_item)
+        let is_terminal_tab = index != crate::gui::app::SETTINGS_TAB_INDEX;
+        let mut tab_item = mouse_area(tab_item)
             .on_press(Message::TabSelected(index))
-            .on_enter(Message::TabDragHover(index))
-            .into();
-        tab_elements.push(tab_item);
+            .on_enter(Message::TabDragHover(index));
+        if is_terminal_tab {
+            tab_item = tab_item
+                .on_right_press(Message::ShowTabContextMenu(index))
+                .on_move(Message::CursorMoved);
+        }
+        tab_elements.push(tab_item.into());
     }
 
     let icon_style = move |_theme: &Theme, status: button::Status| button::Style {

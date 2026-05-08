@@ -47,6 +47,10 @@ pub enum Message {
     SaveSshProfileModal,
     CreateSshTab(usize),
     LaunchFromHistory(usize),
+    DuplicateTab,
+    ShowTabContextMenu(usize),
+    CloseTabContextMenu,
+    CursorMoved(iced::Point),
     #[cfg(target_os = "macos")]
     ConfirmRestartForBlur,
     #[cfg(target_os = "macos")]
@@ -130,6 +134,8 @@ pub struct App {
     pub(super) ime_preedit: Option<(String, Option<std::ops::Range<usize>>)>,
     pub(super) session_history: SessionHistory,
     pub(super) window_style_applied: bool,
+    pub(super) tab_context_menu: Option<usize>,
+    pub(super) cursor_position: iced::Point,
     #[cfg(target_os = "macos")]
     pub(super) show_restart_confirm: bool,
     #[cfg(target_os = "macos")]
@@ -175,6 +181,8 @@ impl App {
             resize_debounce_spawned_seq: 0,
             session_history: SessionHistory::load(),
             palette,
+            tab_context_menu: None,
+            cursor_position: iced::Point::ORIGIN,
             ime_active: false,
             ime_preedit: None,
             shell_picker_anim: Animation::new(false)

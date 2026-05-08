@@ -100,6 +100,7 @@ impl App {
                 self.drag_target = None;
             }
             Message::CloseTab(index) => {
+                self.tab_context_menu = None;
                 self.handle_close_tab(index);
             }
             Message::OpenShellPicker => {
@@ -124,6 +125,25 @@ impl App {
                     && let Some(shell) = entry.kind.to_shell_kind(&self.config.ssh_profiles)
                 {
                     return self.create_tab(shell);
+                }
+            }
+            Message::DuplicateTab => {
+                let index = self.tab_context_menu.unwrap_or(self.active_tab);
+                self.tab_context_menu = None;
+                if let Some(tab) = self.tabs.get(index) {
+                    let shell = tab.shell.clone();
+                    return self.create_tab(shell);
+                }
+            }
+            Message::ShowTabContextMenu(index) => {
+                self.tab_context_menu = Some(index);
+            }
+            Message::CloseTabContextMenu => {
+                self.tab_context_menu = None;
+            }
+            Message::CursorMoved(point) => {
+                if self.tab_context_menu.is_none() {
+                    self.cursor_position = point;
                 }
             }
 
