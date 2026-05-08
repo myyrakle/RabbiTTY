@@ -177,7 +177,8 @@ impl App {
         let version_label = text(format!("RabbiTTY v{}", env!("CARGO_PKG_VERSION")))
             .size(13)
             .color(Color::from_rgba(1.0, 1.0, 1.0, 0.4));
-        let new_tab_btn = button_secondary(t!("lobby.new_tab"), palette).on_press(Message::OpenShellPicker);
+        let new_tab_btn =
+            button_secondary(t!("lobby.new_tab"), palette).on_press(Message::OpenShellPicker);
 
         let mut content: Vec<Element<Message>> =
             vec![logo.into(), version_label.into(), new_tab_btn.into()];
@@ -209,7 +210,9 @@ impl App {
             for (i, entry) in self.session_history.entries.iter().enumerate() {
                 let name = entry.display_name.clone();
                 let kind_label = match &entry.kind {
-                    crate::session_history::SessionKind::Default => t!("session_kind.default_shell"),
+                    crate::session_history::SessionKind::Default => {
+                        t!("session_kind.default_shell")
+                    }
                     crate::session_history::SessionKind::Shell { .. } => t!("session_kind.shell"),
                     crate::session_history::SessionKind::Ssh { .. } => t!("session_kind.ssh"),
                 };

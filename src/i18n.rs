@@ -29,12 +29,18 @@ mod tests {
 
     #[test]
     fn en_translation_works() {
-        assert_eq!(get_translation("en", "shell_picker.title"), Some("Start New Session"));
+        assert_eq!(
+            get_translation("en", "shell_picker.title"),
+            Some("Start New Session")
+        );
     }
 
     #[test]
     fn ko_translation_works() {
-        assert_eq!(get_translation("ko", "shell_picker.title"), Some("새 세션 시작"));
+        assert_eq!(
+            get_translation("ko", "shell_picker.title"),
+            Some("새 세션 시작")
+        );
     }
 
     #[test]
