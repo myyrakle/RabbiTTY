@@ -177,7 +177,7 @@ impl App {
         let version_label = text(format!("RabbiTTY v{}", env!("CARGO_PKG_VERSION")))
             .size(13)
             .color(Color::from_rgba(1.0, 1.0, 1.0, 0.4));
-        let new_tab_btn = button_secondary("New Tab", palette).on_press(Message::OpenShellPicker);
+        let new_tab_btn = button_secondary(t!("lobby.new_tab"), palette).on_press(Message::OpenShellPicker);
 
         let mut content: Vec<Element<Message>> =
             vec![logo.into(), version_label.into(), new_tab_btn.into()];
@@ -197,7 +197,7 @@ impl App {
                     .into(),
             );
             content.push(
-                text("Recent Sessions")
+                text(t!("lobby.recent_sessions"))
                     .size(11)
                     .color(Color {
                         a: 0.5,
@@ -209,9 +209,9 @@ impl App {
             for (i, entry) in self.session_history.entries.iter().enumerate() {
                 let name = entry.display_name.clone();
                 let kind_label = match &entry.kind {
-                    crate::session_history::SessionKind::Default => "Default Shell",
-                    crate::session_history::SessionKind::Shell { .. } => "Shell",
-                    crate::session_history::SessionKind::Ssh { .. } => "SSH",
+                    crate::session_history::SessionKind::Default => t!("session_kind.default_shell"),
+                    crate::session_history::SessionKind::Shell { .. } => t!("session_kind.shell"),
+                    crate::session_history::SessionKind::Ssh { .. } => t!("session_kind.ssh"),
                 };
 
                 let label_col = column![
@@ -278,11 +278,11 @@ impl App {
             base_layout,
             vec![
                 ContextMenuItem {
-                    label: "Duplicate",
+                    label: t!("context_menu.duplicate"),
                     message: Message::DuplicateTab,
                 },
                 ContextMenuItem {
-                    label: "Close",
+                    label: t!("context_menu.close"),
                     message: Message::CloseTab(tab_index),
                 },
             ],

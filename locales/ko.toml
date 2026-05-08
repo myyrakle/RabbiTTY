@@ -1,0 +1,18 @@
+[shell_picker]
+title = "새 세션 시작"
+ssh = "SSH"
+shells = "셸"
+default = "기본"
+
+[context_menu]
+duplicate = "복제"
+close = "닫기"
+
+[lobby]
+new_tab = "새 탭"
+recent_sessions = "최근 세션"
+
+[session_kind]
+default_shell = "기본 셸"
+shell = "셸"
+ssh = "SSH"

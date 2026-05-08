@@ -1,0 +1,18 @@
+[shell_picker]
+title = "Start New Session"
+ssh = "SSH"
+shells = "Shells"
+default = "Default"
+
+[context_menu]
+duplicate = "Duplicate"
+close = "Close"
+
+[lobby]
+new_tab = "New Tab"
+recent_sessions = "Recent Sessions"
+
+[session_kind]
+default_shell = "Default Shell"
+shell = "Shell"
+ssh = "SSH"

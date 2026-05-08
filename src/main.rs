@@ -1,5 +1,7 @@
 mod ansi;
 mod config;
+#[macro_use]
+mod i18n;
 mod gui;
 mod keychain;
 mod platform;
