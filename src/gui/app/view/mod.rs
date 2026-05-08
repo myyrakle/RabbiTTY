@@ -278,11 +278,11 @@ impl App {
             base_layout,
             vec![
                 ContextMenuItem {
-                    label: "복제",
+                    label: "Duplicate",
                     message: Message::DuplicateTab,
                 },
                 ContextMenuItem {
-                    label: "닫기",
+                    label: "Close",
                     message: Message::CloseTab(tab_index),
                 },
             ],
