@@ -14,6 +14,25 @@ Rabbitty is a terminal emulator chasing `foot`-like memory thrift and cross-plat
 - Cross-platform: consistent on macOS, Linux, Windows.
 - Featureful and fancy: tabs, themes, and modern UX without bloat.
 
+## Install
+
+**Linux / macOS:**
+```sh
+curl -fsSL https://raw.githubusercontent.com/wHoIsDReAmer/RabbiTTY/main/install.sh | sh
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/wHoIsDReAmer/RabbiTTY/main/install.ps1 | iex
+```
+
+**From source (`cargo install`):**
+```sh
+cargo install --git https://github.com/wHoIsDReAmer/RabbiTTY
+```
+
+The Unix script installs the binary to `~/.local/bin/rabbitty` and (on macOS) the `.app` bundle to `~/Applications`. The PowerShell script installs to `%LOCALAPPDATA%\Rabbitty` and adds it to your user PATH.
+
 ## Goals
 
 - [x] SSH Managing
