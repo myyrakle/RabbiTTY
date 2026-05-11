@@ -100,8 +100,6 @@ impl App {
             ..Default::default()
         };
         self.config.apply_updates(updates);
-        self.settings_draft
-            .sync_window_size(self.config.ui.window_width, self.config.ui.window_height);
         if (self.config.ui.window_width - previous_width).abs() > f32::EPSILON
             || (self.config.ui.window_height - previous_height).abs() > f32::EPSILON
         {

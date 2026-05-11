@@ -1,6 +1,6 @@
 use crate::config::AppConfig;
 use crate::gui::app::Message;
-use crate::gui::settings::{SettingsDraft, SettingsField, input_row_with_suffix, section};
+use crate::gui::settings::{SettingsDraft, SettingsField, section};
 use crate::gui::theme::{Palette, RADIUS_SMALL, SPACING_NORMAL};
 use crate::i18n::AVAILABLE_LOCALES;
 use iced::widget::{button, column, row, text};
@@ -17,31 +17,7 @@ pub fn view<'a>(
         palette,
     );
 
-    let window_section = section(
-        t!("settings.ui.window_section"),
-        column(vec![
-            input_row_with_suffix(
-                t!("settings.ui.width"),
-                &draft.window_width,
-                SettingsField::UiWindowWidth,
-                "px",
-                palette,
-            ),
-            input_row_with_suffix(
-                t!("settings.ui.height"),
-                &draft.window_height,
-                SettingsField::UiWindowHeight,
-                "px",
-                palette,
-            ),
-        ])
-        .spacing(SPACING_NORMAL)
-        .width(Length::Fill)
-        .into(),
-        palette,
-    );
-
-    column(vec![language_section, window_section])
+    column(vec![language_section])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into()

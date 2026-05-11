@@ -27,8 +27,6 @@ impl fmt::Display for TerminalFontOption {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsField {
     UiLanguage,
-    UiWindowWidth,
-    UiWindowHeight,
     TerminalFontSelection,
     TerminalFontSize,
     TerminalPaddingX,
@@ -209,8 +207,6 @@ impl SshProfileDraft {
 #[derive(Debug, Clone)]
 pub struct SettingsDraft {
     pub language: String,
-    pub window_width: String,
-    pub window_height: String,
     pub terminal_font_selection: String,
     pub terminal_font_size: String,
     pub terminal_padding_x: String,
@@ -244,8 +240,6 @@ impl SettingsDraft {
                 .language
                 .clone()
                 .unwrap_or_else(|| "auto".to_string()),
-            window_width: format!("{:.0}", config.ui.window_width),
-            window_height: format!("{:.0}", config.ui.window_height),
             terminal_font_selection: config.terminal.font_selection.clone().unwrap_or_default(),
             terminal_font_size: format!("{:.1}", config.terminal.font_size),
             terminal_padding_x: format!("{:.1}", config.terminal.padding_x),
@@ -420,8 +414,6 @@ impl SettingsDraft {
     pub fn update(&mut self, field: SettingsField, value: String) {
         match field {
             SettingsField::UiLanguage => self.language = value,
-            SettingsField::UiWindowWidth => self.window_width = value,
-            SettingsField::UiWindowHeight => self.window_height = value,
             SettingsField::TerminalFontSelection => self.terminal_font_selection = value,
             SettingsField::TerminalFontSize => self.terminal_font_size = value,
             SettingsField::TerminalPaddingX => self.terminal_padding_x = value,
@@ -448,19 +440,12 @@ impl SettingsDraft {
         }
     }
 
-    pub fn sync_window_size(&mut self, width: f32, height: f32) {
-        self.window_width = format!("{width:.0}");
-        self.window_height = format!("{height:.0}");
-    }
-
     #[allow(dead_code)]
     pub fn to_updates(&self) -> AppConfigUpdates {
         let ansi_colors = crate::terminal::theme::find_preset(&self.color_scheme).map(|p| p.ansi);
 
         let mut updates = AppConfigUpdates {
             language: Some(self.language.clone()),
-            window_width: parse_f32(&self.window_width),
-            window_height: parse_f32(&self.window_height),
             terminal_font_selection: Some(self.terminal_font_selection.clone()),
             terminal_font_size: parse_f32(&self.terminal_font_size),
             terminal_padding_x: parse_f32(&self.terminal_padding_x),
