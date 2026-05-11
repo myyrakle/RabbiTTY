@@ -18,6 +18,7 @@ use crate::gui::App;
 
 // Embed DejaVu Sans font for better Unicode support (Box Drawing characters)
 const DEJAVU_SANS: &[u8] = include_bytes!("../fonts/DejaVuSans.ttf");
+const APP_ICON_PNG: &[u8] = include_bytes!("../assets/logo.png");
 
 fn main() -> iced::Result {
     let app_config = AppConfig::load();
@@ -53,6 +54,7 @@ fn main() -> iced::Result {
         exit_on_close_request: false,
         size: Size::new(app_config.ui.window_width, app_config.ui.window_height),
         transparent: true,
+        icon: iced::window::icon::from_file_data(APP_ICON_PNG, None).ok(),
 
         #[cfg(target_os = "macos")]
         platform_specific: iced::window::settings::PlatformSpecific {
