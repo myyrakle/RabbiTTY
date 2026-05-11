@@ -19,6 +19,7 @@ Rabbitty is a terminal emulator chasing `foot`-like memory thrift and cross-plat
 - [x] SSH Managing
 - [ ] Plugin support with wasm
 - [x] Easy changing theme
+- [x] i18n (English, 한국어)
 - [ ] Easy file upload & download with SFTP
 - [ ] Split terminal in single tab
 
