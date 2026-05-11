@@ -82,7 +82,7 @@ fn language_button<'a>(
             .size(13)
             .color(if is_selected { accent } else { text_color }),
     )
-    .on_press(Message::SettingsInputChanged(
+    .on_press(Message::SettingsInputCommitted(
         SettingsField::UiLanguage,
         tag.to_string(),
     ))

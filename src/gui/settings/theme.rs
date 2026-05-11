@@ -216,7 +216,7 @@ fn build_preset_card<'a>(
                 ..Default::default()
             }),
     )
-    .on_press(Message::SettingsInputChanged(
+    .on_press(Message::SettingsInputCommitted(
         SettingsField::ThemeColorScheme,
         name.to_string(),
     ))
@@ -282,7 +282,7 @@ fn color_palette_row<'a>(
                         }
                     }),
             )
-            .on_press(Message::SettingsInputChanged(field, hex))
+            .on_press(Message::SettingsInputCommitted(field, hex))
             .padding(0)
             .style(|_theme: &iced::Theme, _status| button::Style {
                 background: None,
@@ -298,11 +298,13 @@ fn color_palette_row<'a>(
     let swatch_grid = Row::with_children(swatches).spacing(4).width(Length::Fill);
 
     // Current color indicator + hex input
+    let commit_msg = Message::SettingsInputCommitted(field, current_hex.to_owned());
     let hex_input = crate::gui::settings::styled_text_input_small(
         current_hex,
         move |next| Message::SettingsInputChanged(field, next),
         *palette,
-    );
+    )
+    .on_submit(commit_msg);
 
     column![
         row![

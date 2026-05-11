@@ -32,6 +32,7 @@ pub enum Message {
     OpenSettingsTab,
     SelectSettingsCategory(SettingsCategory),
     SettingsInputChanged(SettingsField, String),
+    SettingsInputCommitted(SettingsField, String),
     SettingsBlurToggled(bool),
     AddSshProfile,
     EditSshProfile(usize),

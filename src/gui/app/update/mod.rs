@@ -205,12 +205,18 @@ impl App {
             Message::SettingsInputChanged(field, value) => {
                 self.settings_draft.update(field, value);
             }
+            Message::SettingsInputCommitted(field, value) => {
+                self.settings_draft.update(field, value);
+                return self.apply_settings(true);
+            }
             Message::SettingsBlurToggled(enabled) => {
                 self.settings_draft.blur_enabled = enabled;
+                return self.apply_settings(true);
             }
             Message::FontSelected(option) => {
                 self.settings_draft
                     .update(SettingsField::TerminalFontSelection, option.value);
+                return self.apply_settings(true);
             }
             Message::ToggleShowAllFonts(show_all) => {
                 self.show_all_fonts = show_all;
@@ -219,6 +225,7 @@ impl App {
                     show_all,
                     self.config.terminal.font_selection.as_deref(),
                 );
+                return self.apply_settings(true);
             }
             #[cfg(target_os = "macos")]
             Message::ConfirmRestartForBlur => {

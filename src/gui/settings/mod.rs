@@ -563,13 +563,15 @@ pub fn input_row<'a>(
     field: SettingsField,
     palette: Palette,
 ) -> Element<'a, Message> {
+    let commit_msg = Message::SettingsInputCommitted(field, value.to_owned());
     row![
         text(label).size(13).width(Length::Fixed(LABEL_WIDTH)),
         styled_text_input(
             value,
             move |next| Message::SettingsInputChanged(field, next),
             palette
-        ),
+        )
+        .on_submit(commit_msg),
     ]
     .align_y(Alignment::Center)
     .spacing(SPACING_NORMAL)
@@ -584,13 +586,15 @@ pub fn input_row_with_suffix<'a>(
     suffix: &'a str,
     palette: Palette,
 ) -> Element<'a, Message> {
+    let commit_msg = Message::SettingsInputCommitted(field, value.to_owned());
     row![
         text(label).size(13).width(Length::Fixed(LABEL_WIDTH)),
         styled_text_input(
             value,
             move |next| Message::SettingsInputChanged(field, next),
             palette
-        ),
+        )
+        .on_submit(commit_msg),
         text(suffix)
             .size(12)
             .color(palette.text_secondary)
@@ -613,6 +617,7 @@ pub fn color_input_row<'a>(
     let dot_color = parsed
         .map(|rgb| Color::from_rgb8(rgb[0], rgb[1], rgb[2]))
         .unwrap_or(palette.error);
+    let commit_msg = Message::SettingsInputCommitted(field, value.to_owned());
 
     row![
         text(label).size(13).width(Length::Fixed(LABEL_WIDTH)),
@@ -635,7 +640,8 @@ pub fn color_input_row<'a>(
             value,
             move |next| Message::SettingsInputChanged(field, next),
             palette
-        ),
+        )
+        .on_submit(commit_msg),
     ]
     .align_y(Alignment::Center)
     .spacing(SPACING_NORMAL)
