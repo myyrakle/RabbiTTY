@@ -67,3 +67,18 @@ objc2-app-kit = "0.3.2"
 
 [target.'cfg(not(any(target_os = "windows", target_os = "macos")))'.dependencies]
 keyring = { version = "3", default-features = false, features = ["linux-native"] }
+
+[target.'cfg(target_os = "windows")'.build-dependencies]
+winresource = "0.1"
+ico = "0.4"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[package.metadata.bundle]
+name = "Rabbitty"
+identifier = "io.github.rabbitty"
+icon = ["assets/icon.icns"]
+version = "0.1.1"
+copyright = "Copyright 2026 RabbiTTY contributors"
+category = "public.app-category.utilities"
+short_description = "Fast, lean terminal emulator."
+long_description = "Rabbitty is a fast, lean, cross-platform terminal emulator with SSH support."

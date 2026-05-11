@@ -70,6 +70,34 @@ fn main() {
     code.push_str("];\n");
 
     std::fs::write(out_path, code).unwrap();
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::io::Write;
+
+        let logo_path = "assets/logo.png";
+        println!("cargo:rerun-if-changed={logo_path}");
+
+        let src = image::open(logo_path).expect("failed to open assets/logo.png");
+        let mut icon_dir = ico::IconDir::new(ico::ResourceType::Icon);
+        for size in [16u32, 32, 48, 64, 128, 256] {
+            let resized = src.resize_exact(size, size, image::imageops::FilterType::Lanczos3);
+            let rgba = resized.into_rgba8();
+            let icon_image = ico::IconImage::from_rgba_data(size, size, rgba.into_raw());
+            icon_dir.add_entry(ico::IconDirEntry::encode(&icon_image).expect("ico encode failed"));
+        }
+
+        let out_dir = std::env::var_os("OUT_DIR").expect("OUT_DIR not set");
+        let ico_path = std::path::PathBuf::from(out_dir).join("rabbitty.ico");
+        let file = std::fs::File::create(&ico_path).expect("failed to create rabbitty.ico");
+        icon_dir
+            .write(std::io::BufWriter::new(file))
+            .expect("ico write failed");
+
+        let mut res = winresource::WindowsResource::new();
+        res.set_icon(ico_path.to_str().expect("ico path is not valid UTF-8"));
+        res.compile().expect("winresource compile failed");
+    }
 }
 
 fn parse_toml(src: &str) -> HashMap<String, String> {
