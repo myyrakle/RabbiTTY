@@ -11,6 +11,7 @@ use iced::Size;
 use iced::futures::channel::mpsc;
 use iced::keyboard::{Key, Modifiers};
 use iced::widget::combo_box;
+use std::sync::mpsc as std_mpsc;
 
 mod shortcuts;
 mod subscription;
@@ -32,6 +33,7 @@ pub enum Message {
     OpenSettingsTab,
     SelectSettingsCategory(SettingsCategory),
     SettingsInputChanged(SettingsField, String),
+    SettingsInputCommitted(SettingsField, String),
     SettingsBlurToggled(bool),
     AddSshProfile,
     EditSshProfile(usize),
@@ -86,6 +88,7 @@ pub enum Message {
 
     WindowResized(Size),
     ResizeDebounce,
+    SettingsCommitDebounce,
     AnimationTick,
     ApplyWindowStyle,
 
@@ -127,6 +130,9 @@ pub struct App {
     pub(super) resize_debounce_pending: bool,
     pub(super) resize_debounce_seq: u64,
     pub(super) resize_debounce_spawned_seq: u64,
+    pub(super) settings_debounce_pending: bool,
+    pub(super) settings_debounce_seq: u64,
+    pub(super) settings_debounce_spawned_seq: u64,
     pub(super) shell_picker_anim: Animation<bool>,
     pub(super) palette: crate::gui::theme::Palette,
     pub(super) ime_active: bool,
@@ -141,6 +147,22 @@ pub struct App {
     pub(super) pending_settings_updates: Option<crate::config::AppConfigUpdates>,
     #[cfg(target_os = "macos")]
     pub(super) pending_save_on_restart: bool,
+    pub(super) config_save_tx: std_mpsc::Sender<AppConfig>,
+}
+
+fn spawn_config_save_worker() -> std_mpsc::Sender<AppConfig> {
+    let (tx, rx) = std_mpsc::channel::<AppConfig>();
+    std::thread::spawn(move || {
+        while let Ok(mut latest) = rx.recv() {
+            while let Ok(newer) = rx.try_recv() {
+                latest = newer;
+            }
+            if let Err(err) = latest.save() {
+                eprintln!("Failed to save config: {err}");
+            }
+        }
+    });
+    tx
 }
 
 impl App {
@@ -179,6 +201,9 @@ impl App {
             resize_debounce_pending: false,
             resize_debounce_seq: 0,
             resize_debounce_spawned_seq: 0,
+            settings_debounce_pending: false,
+            settings_debounce_seq: 0,
+            settings_debounce_spawned_seq: 0,
             session_history: SessionHistory::load(),
             palette,
             tab_context_menu: None,
@@ -195,6 +220,7 @@ impl App {
             pending_settings_updates: None,
             #[cfg(target_os = "macos")]
             pending_save_on_restart: false,
+            config_save_tx: spawn_config_save_worker(),
         }
     }
 

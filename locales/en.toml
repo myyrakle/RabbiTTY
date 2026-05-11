@@ -27,11 +27,6 @@ theme = "Theme"
 shortcuts = "Shortcuts"
 ssh = "SSH"
 
-[settings.ui]
-window_section = "Window"
-width = "Width"
-height = "Height"
-
 [settings.language]
 section_title = "Language"
 auto = "Auto"

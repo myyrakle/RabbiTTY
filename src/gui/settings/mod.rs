@@ -27,8 +27,6 @@ impl fmt::Display for TerminalFontOption {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsField {
     UiLanguage,
-    UiWindowWidth,
-    UiWindowHeight,
     TerminalFontSelection,
     TerminalFontSize,
     TerminalPaddingX,
@@ -209,8 +207,6 @@ impl SshProfileDraft {
 #[derive(Debug, Clone)]
 pub struct SettingsDraft {
     pub language: String,
-    pub window_width: String,
-    pub window_height: String,
     pub terminal_font_selection: String,
     pub terminal_font_size: String,
     pub terminal_padding_x: String,
@@ -244,8 +240,6 @@ impl SettingsDraft {
                 .language
                 .clone()
                 .unwrap_or_else(|| "auto".to_string()),
-            window_width: format!("{:.0}", config.ui.window_width),
-            window_height: format!("{:.0}", config.ui.window_height),
             terminal_font_selection: config.terminal.font_selection.clone().unwrap_or_default(),
             terminal_font_size: format!("{:.1}", config.terminal.font_size),
             terminal_padding_x: format!("{:.1}", config.terminal.padding_x),
@@ -420,8 +414,6 @@ impl SettingsDraft {
     pub fn update(&mut self, field: SettingsField, value: String) {
         match field {
             SettingsField::UiLanguage => self.language = value,
-            SettingsField::UiWindowWidth => self.window_width = value,
-            SettingsField::UiWindowHeight => self.window_height = value,
             SettingsField::TerminalFontSelection => self.terminal_font_selection = value,
             SettingsField::TerminalFontSize => self.terminal_font_size = value,
             SettingsField::TerminalPaddingX => self.terminal_padding_x = value,
@@ -448,19 +440,12 @@ impl SettingsDraft {
         }
     }
 
-    pub fn sync_window_size(&mut self, width: f32, height: f32) {
-        self.window_width = format!("{width:.0}");
-        self.window_height = format!("{height:.0}");
-    }
-
     #[allow(dead_code)]
     pub fn to_updates(&self) -> AppConfigUpdates {
         let ansi_colors = crate::terminal::theme::find_preset(&self.color_scheme).map(|p| p.ansi);
 
         let mut updates = AppConfigUpdates {
             language: Some(self.language.clone()),
-            window_width: parse_f32(&self.window_width),
-            window_height: parse_f32(&self.window_height),
             terminal_font_selection: Some(self.terminal_font_selection.clone()),
             terminal_font_size: parse_f32(&self.terminal_font_size),
             terminal_padding_x: parse_f32(&self.terminal_padding_x),
@@ -563,13 +548,15 @@ pub fn input_row<'a>(
     field: SettingsField,
     palette: Palette,
 ) -> Element<'a, Message> {
+    let commit_msg = Message::SettingsInputCommitted(field, value.to_owned());
     row![
         text(label).size(13).width(Length::Fixed(LABEL_WIDTH)),
         styled_text_input(
             value,
             move |next| Message::SettingsInputChanged(field, next),
             palette
-        ),
+        )
+        .on_submit(commit_msg),
     ]
     .align_y(Alignment::Center)
     .spacing(SPACING_NORMAL)
@@ -584,13 +571,15 @@ pub fn input_row_with_suffix<'a>(
     suffix: &'a str,
     palette: Palette,
 ) -> Element<'a, Message> {
+    let commit_msg = Message::SettingsInputCommitted(field, value.to_owned());
     row![
         text(label).size(13).width(Length::Fixed(LABEL_WIDTH)),
         styled_text_input(
             value,
             move |next| Message::SettingsInputChanged(field, next),
             palette
-        ),
+        )
+        .on_submit(commit_msg),
         text(suffix)
             .size(12)
             .color(palette.text_secondary)
@@ -613,6 +602,7 @@ pub fn color_input_row<'a>(
     let dot_color = parsed
         .map(|rgb| Color::from_rgb8(rgb[0], rgb[1], rgb[2]))
         .unwrap_or(palette.error);
+    let commit_msg = Message::SettingsInputCommitted(field, value.to_owned());
 
     row![
         text(label).size(13).width(Length::Fixed(LABEL_WIDTH)),
@@ -635,7 +625,8 @@ pub fn color_input_row<'a>(
             value,
             move |next| Message::SettingsInputChanged(field, next),
             palette
-        ),
+        )
+        .on_submit(commit_msg),
     ]
     .align_y(Alignment::Center)
     .spacing(SPACING_NORMAL)

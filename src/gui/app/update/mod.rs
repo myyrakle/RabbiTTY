@@ -204,13 +204,45 @@ impl App {
             }
             Message::SettingsInputChanged(field, value) => {
                 self.settings_draft.update(field, value);
+                self.settings_debounce_seq = self.settings_debounce_seq.wrapping_add(1);
+                if self.settings_debounce_pending {
+                    return Task::none();
+                }
+                self.settings_debounce_pending = true;
+                self.settings_debounce_spawned_seq = self.settings_debounce_seq;
+                return Task::perform(
+                    async {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                    },
+                    |()| Message::SettingsCommitDebounce,
+                );
+            }
+            Message::SettingsInputCommitted(field, value) => {
+                self.settings_draft.update(field, value);
+                self.settings_debounce_spawned_seq = self.settings_debounce_seq;
+                return self.apply_settings(true);
+            }
+            Message::SettingsCommitDebounce => {
+                if self.settings_debounce_spawned_seq != self.settings_debounce_seq {
+                    self.settings_debounce_spawned_seq = self.settings_debounce_seq;
+                    return Task::perform(
+                        async {
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                        },
+                        |()| Message::SettingsCommitDebounce,
+                    );
+                }
+                self.settings_debounce_pending = false;
+                return self.apply_settings(true);
             }
             Message::SettingsBlurToggled(enabled) => {
                 self.settings_draft.blur_enabled = enabled;
+                return self.apply_settings(true);
             }
             Message::FontSelected(option) => {
                 self.settings_draft
                     .update(SettingsField::TerminalFontSelection, option.value);
+                return self.apply_settings(true);
             }
             Message::ToggleShowAllFonts(show_all) => {
                 self.show_all_fonts = show_all;
@@ -219,6 +251,7 @@ impl App {
                     show_all,
                     self.config.terminal.font_selection.as_deref(),
                 );
+                return self.apply_settings(true);
             }
             #[cfg(target_os = "macos")]
             Message::ConfirmRestartForBlur => {
