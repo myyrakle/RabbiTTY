@@ -88,6 +88,7 @@ pub enum Message {
 
     WindowResized(Size),
     ResizeDebounce,
+    SettingsCommitDebounce,
     AnimationTick,
     ApplyWindowStyle,
 
@@ -129,6 +130,9 @@ pub struct App {
     pub(super) resize_debounce_pending: bool,
     pub(super) resize_debounce_seq: u64,
     pub(super) resize_debounce_spawned_seq: u64,
+    pub(super) settings_debounce_pending: bool,
+    pub(super) settings_debounce_seq: u64,
+    pub(super) settings_debounce_spawned_seq: u64,
     pub(super) shell_picker_anim: Animation<bool>,
     pub(super) palette: crate::gui::theme::Palette,
     pub(super) ime_active: bool,
@@ -197,6 +201,9 @@ impl App {
             resize_debounce_pending: false,
             resize_debounce_seq: 0,
             resize_debounce_spawned_seq: 0,
+            settings_debounce_pending: false,
+            settings_debounce_seq: 0,
+            settings_debounce_spawned_seq: 0,
             session_history: SessionHistory::load(),
             palette,
             tab_context_menu: None,

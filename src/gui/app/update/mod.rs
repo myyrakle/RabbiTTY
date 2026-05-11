@@ -204,9 +204,35 @@ impl App {
             }
             Message::SettingsInputChanged(field, value) => {
                 self.settings_draft.update(field, value);
+                self.settings_debounce_seq = self.settings_debounce_seq.wrapping_add(1);
+                if self.settings_debounce_pending {
+                    return Task::none();
+                }
+                self.settings_debounce_pending = true;
+                self.settings_debounce_spawned_seq = self.settings_debounce_seq;
+                return Task::perform(
+                    async {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                    },
+                    |()| Message::SettingsCommitDebounce,
+                );
             }
             Message::SettingsInputCommitted(field, value) => {
                 self.settings_draft.update(field, value);
+                self.settings_debounce_spawned_seq = self.settings_debounce_seq;
+                return self.apply_settings(true);
+            }
+            Message::SettingsCommitDebounce => {
+                if self.settings_debounce_spawned_seq != self.settings_debounce_seq {
+                    self.settings_debounce_spawned_seq = self.settings_debounce_seq;
+                    return Task::perform(
+                        async {
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                        },
+                        |()| Message::SettingsCommitDebounce,
+                    );
+                }
+                self.settings_debounce_pending = false;
                 return self.apply_settings(true);
             }
             Message::SettingsBlurToggled(enabled) => {
