@@ -130,7 +130,14 @@ impl App {
                     && matches!(tab.shell, ShellKind::Ssh(_))
                 {
                     let was_open = tab.sftp.open;
-                    tab.sftp.open = !was_open;
+                    let now = Instant::now();
+                    tab.sftp.anim.go_mut(!was_open, now);
+                    if was_open {
+                        // Keep `open` true while the close animation plays;
+                        // AnimationTick clears it once the animation settles.
+                    } else {
+                        tab.sftp.open = true;
+                    }
                     if !was_open
                         && tab.sftp.command_tx.is_none()
                         && !tab.sftp.opening
@@ -479,6 +486,11 @@ impl App {
                 if !self.shell_picker_anim.is_animating(now) && !self.shell_picker_anim.value() {
                     self.show_shell_picker = false;
                     self.shell_picker_selected = 0;
+                }
+                for tab in &mut self.tabs {
+                    if !tab.sftp.anim.is_animating(now) && !tab.sftp.anim.value() {
+                        tab.sftp.open = false;
+                    }
                 }
             }
             Message::ResizeDebounce => {

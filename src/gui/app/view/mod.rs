@@ -175,14 +175,23 @@ impl App {
             terminal_widget.into()
         };
 
-        let with_drawer: Element<Message> = if active_tab.sftp.open {
+        let now = iced::time::Instant::now();
+        let drawer_progress: f32 = active_tab
+            .sftp
+            .anim
+            .interpolate(0.0f32, 1.0f32, now)
+            .clamp(0.0, 1.0);
+        let drawer_visible = active_tab.sftp.open || drawer_progress > 0.001;
+        let with_drawer: Element<Message> = if drawer_visible {
             let height_ratio = active_tab.sftp.height_ratio.clamp(0.15, 0.85);
-            let bottom_portion = ((height_ratio * 1000.0).round() as u16).max(1);
+            let effective = (height_ratio * drawer_progress).clamp(0.0, height_ratio);
+            let bottom_portion = ((effective * 1000.0).round() as u16).max(1);
             let top_portion = 1000u16.saturating_sub(bottom_portion).max(1);
             let drawer_panel =
                 container(sftp::drawer(&active_tab.sftp, active_tab.id, self.palette))
                     .width(Length::Fill)
-                    .height(Length::FillPortion(bottom_portion));
+                    .height(Length::FillPortion(bottom_portion))
+                    .clip(true);
             let overlay = column![
                 iced::widget::Space::new().height(Length::FillPortion(top_portion)),
                 drawer_panel,

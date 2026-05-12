@@ -1,6 +1,7 @@
 //! GUI state for the SFTP drawer attached to an SSH terminal tab.
 
 use crate::ssh::sftp;
+use iced::Animation;
 use iced::futures::channel::mpsc;
 
 /// Default initial path used when the drawer first opens.
@@ -17,7 +18,7 @@ pub struct TransferRow {
     pub finished: bool,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct SftpDrawerState {
     /// True once the user has toggled the drawer open. Renders the panel.
     pub open: bool,
@@ -37,6 +38,14 @@ pub struct SftpDrawerState {
     pub command_tx: Option<mpsc::UnboundedSender<sftp::Command>>,
     /// Fraction of available height the drawer should occupy (0.0..=1.0).
     pub height_ratio: f32,
+    /// Open/close animation driving the slide-up reveal.
+    pub anim: Animation<bool>,
+}
+
+impl Default for SftpDrawerState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Best-effort parent path for the SFTP browser. Returns `None` only when
@@ -80,6 +89,9 @@ impl SftpDrawerState {
             transfers: Vec::new(),
             command_tx: None,
             height_ratio: DEFAULT_HEIGHT_RATIO,
+            anim: Animation::new(false)
+                .duration(std::time::Duration::from_millis(220))
+                .easing(iced::animation::Easing::EaseOutQuint),
         }
     }
 
