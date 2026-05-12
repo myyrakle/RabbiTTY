@@ -1,3 +1,5 @@
+pub mod sftp;
+
 use crate::config::{SshAuthMethod, SshProfile};
 use crate::session::OutputEvent;
 use async_trait::async_trait;

@@ -7,7 +7,6 @@ mod keychain;
 mod platform;
 mod session;
 mod session_history;
-mod sftp;
 mod ssh;
 mod terminal;
 
