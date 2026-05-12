@@ -1,4 +1,5 @@
 mod settings;
+mod sftp;
 mod tab;
 mod terminal;
 
@@ -126,9 +127,42 @@ impl App {
             Message::SftpToggleDrawer => {
                 if self.active_tab != SETTINGS_TAB_INDEX
                     && let Some(tab) = self.tabs.get_mut(self.active_tab)
-                    && matches!(tab.shell, crate::gui::tab::ShellKind::Ssh(_))
+                    && matches!(tab.shell, ShellKind::Ssh(_))
                 {
-                    tab.sftp.open = !tab.sftp.open;
+                    let was_open = tab.sftp.open;
+                    tab.sftp.open = !was_open;
+                    if !was_open
+                        && tab.sftp.command_tx.is_none()
+                        && !tab.sftp.opening
+                        && let crate::gui::tab::TerminalSession::Active(session) = &tab.session
+                        && let Some(ssh) = session.ssh_handle()
+                    {
+                        tab.sftp.opening = true;
+                        tab.sftp.error = None;
+                        let tab_id = tab.id;
+                        return sftp::open_sftp_stream(ssh.clone(), tab_id);
+                    }
+                }
+            }
+            Message::SftpOpenSucceeded { tab_id, command_tx } => {
+                if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
+                    tab.sftp.opening = false;
+                    tab.sftp.command_tx = Some(command_tx.clone());
+                    tab.sftp.loading = true;
+                    tab.sftp.error = None;
+                    let path = tab.sftp.current_path.clone();
+                    let _ = command_tx.unbounded_send(crate::ssh::sftp::Command::List(path));
+                }
+            }
+            Message::SftpOpenFailed { tab_id, error } => {
+                if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
+                    tab.sftp.opening = false;
+                    tab.sftp.error = Some(error);
+                }
+            }
+            Message::SftpEvent { tab_id, event } => {
+                if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
+                    sftp::apply_sftp_event(&mut tab.sftp, event);
                 }
             }
             Message::ShowTabContextMenu(index) => {

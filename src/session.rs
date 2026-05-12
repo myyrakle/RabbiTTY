@@ -256,7 +256,6 @@ impl Session {
 
     /// Returns the underlying SSH session handle when this session was spawned
     /// via `spawn_ssh`. Local PTY sessions return `None`.
-    #[allow(dead_code)] // consumed by the SFTP drawer in a later phase
     pub fn ssh_handle(&self) -> Option<&crate::ssh::SshSessionHandle> {
         self.ssh.as_ref()
     }

@@ -49,6 +49,18 @@ pub enum Message {
     LaunchFromHistory(usize),
     DuplicateTab,
     SftpToggleDrawer,
+    SftpOpenSucceeded {
+        tab_id: u64,
+        command_tx: iced::futures::channel::mpsc::UnboundedSender<crate::ssh::sftp::Command>,
+    },
+    SftpOpenFailed {
+        tab_id: u64,
+        error: String,
+    },
+    SftpEvent {
+        tab_id: u64,
+        event: crate::ssh::sftp::Event,
+    },
     ShowTabContextMenu(usize),
     CloseTabContextMenu,
     CursorMoved(iced::Point),

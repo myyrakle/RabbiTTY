@@ -9,13 +9,14 @@
 //! later phase, so the items below are unused for now.
 #![allow(dead_code)]
 
+use iced::futures::StreamExt;
+use iced::futures::channel::mpsc;
 use russh::ChannelMsg;
 use russh::client::Msg;
 use russh_sftp::client::SftpSession;
 use russh_sftp::protocol::FileType;
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::mpsc;
 
 const TRANSFER_CHUNK: usize = 32 * 1024;
 
@@ -78,8 +79,8 @@ pub struct SftpHandle {
 /// The channel must already have the `sftp` subsystem requested. Returns a
 /// `SftpHandle` whose `tx` accepts commands and whose `rx` receives events.
 pub async fn spawn_worker(channel: russh::Channel<Msg>) -> Result<SftpHandle, String> {
-    let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<Command>();
-    let (evt_tx, evt_rx) = mpsc::unbounded_channel::<Event>();
+    let (cmd_tx, cmd_rx) = mpsc::unbounded::<Command>();
+    let (evt_tx, evt_rx) = mpsc::unbounded::<Event>();
 
     let sftp = SftpSession::new(channel.into_stream())
         .await
@@ -100,7 +101,7 @@ async fn run_worker(
 ) {
     let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
 
-    while let Some(cmd) = cmd_rx.recv().await {
+    while let Some(cmd) = cmd_rx.next().await {
         match cmd {
             Command::Shutdown => break,
             Command::Cancel => {
@@ -108,33 +109,33 @@ async fn run_worker(
             }
             Command::List(path) => match list_dir(&sftp, &path).await {
                 Ok(entries) => {
-                    let _ = evt_tx.send(Event::Listed {
+                    let _ = evt_tx.unbounded_send(Event::Listed {
                         path: path.clone(),
                         entries,
                     });
                 }
                 Err(e) => {
-                    let _ = evt_tx.send(Event::Error {
+                    let _ = evt_tx.unbounded_send(Event::Error {
                         message: format!("list {path}: {e}"),
                     });
                 }
             },
             Command::Mkdir(path) => match sftp.create_dir(&path).await {
                 Ok(()) => {
-                    let _ = evt_tx.send(Event::Mutated { path });
+                    let _ = evt_tx.unbounded_send(Event::Mutated { path });
                 }
                 Err(e) => {
-                    let _ = evt_tx.send(Event::Error {
+                    let _ = evt_tx.unbounded_send(Event::Error {
                         message: format!("mkdir {path}: {e}"),
                     });
                 }
             },
             Command::Rename { from, to } => match sftp.rename(&from, &to).await {
                 Ok(()) => {
-                    let _ = evt_tx.send(Event::Mutated { path: to });
+                    let _ = evt_tx.unbounded_send(Event::Mutated { path: to });
                 }
                 Err(e) => {
-                    let _ = evt_tx.send(Event::Error {
+                    let _ = evt_tx.unbounded_send(Event::Error {
                         message: format!("rename {from} -> {to}: {e}"),
                     });
                 }
@@ -147,10 +148,10 @@ async fn run_worker(
                 };
                 match result {
                     Ok(()) => {
-                        let _ = evt_tx.send(Event::Mutated { path });
+                        let _ = evt_tx.unbounded_send(Event::Mutated { path });
                     }
                     Err(e) => {
-                        let _ = evt_tx.send(Event::Error {
+                        let _ = evt_tx.unbounded_send(Event::Error {
                             message: format!("delete {path}: {e}"),
                         });
                     }
@@ -159,7 +160,7 @@ async fn run_worker(
             Command::Upload { local, remote } => {
                 cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
                 if let Err(e) = upload(&sftp, &local, &remote, &evt_tx, &cancelled).await {
-                    let _ = evt_tx.send(Event::Error {
+                    let _ = evt_tx.unbounded_send(Event::Error {
                         message: format!("upload {}: {e}", remote),
                     });
                 }
@@ -167,7 +168,7 @@ async fn run_worker(
             Command::Download { remote, local } => {
                 cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
                 if let Err(e) = download(&sftp, &remote, &local, &evt_tx, &cancelled).await {
-                    let _ = evt_tx.send(Event::Error {
+                    let _ = evt_tx.unbounded_send(Event::Error {
                         message: format!("download {remote}: {e}"),
                     });
                 }
@@ -175,7 +176,7 @@ async fn run_worker(
         }
     }
 
-    let _ = evt_tx.send(Event::Closed);
+    let _ = evt_tx.unbounded_send(Event::Closed);
 }
 
 async fn list_dir(sftp: &SftpSession, path: &str) -> Result<Vec<Entry>, String> {
@@ -222,7 +223,7 @@ async fn upload(
         .await
         .map_err(|e| format!("create remote: {e}"))?;
 
-    let _ = evt_tx.send(Event::TransferStarted {
+    let _ = evt_tx.unbounded_send(Event::TransferStarted {
         path: remote.to_string(),
         total,
     });
@@ -245,7 +246,7 @@ async fn upload(
             .await
             .map_err(|e| format!("write remote: {e}"))?;
         transferred += n as u64;
-        let _ = evt_tx.send(Event::TransferProgress {
+        let _ = evt_tx.unbounded_send(Event::TransferProgress {
             path: remote.to_string(),
             transferred,
             total,
@@ -256,7 +257,7 @@ async fn upload(
         .await
         .map_err(|e| format!("close remote: {e}"))?;
 
-    let _ = evt_tx.send(Event::TransferFinished {
+    let _ = evt_tx.unbounded_send(Event::TransferFinished {
         path: remote.to_string(),
     });
     Ok(())
@@ -283,7 +284,7 @@ async fn download(
         .await
         .map_err(|e| format!("create local: {e}"))?;
 
-    let _ = evt_tx.send(Event::TransferStarted {
+    let _ = evt_tx.unbounded_send(Event::TransferStarted {
         path: remote.to_string(),
         total,
     });
@@ -306,7 +307,7 @@ async fn download(
             .await
             .map_err(|e| format!("write local: {e}"))?;
         transferred += n as u64;
-        let _ = evt_tx.send(Event::TransferProgress {
+        let _ = evt_tx.unbounded_send(Event::TransferProgress {
             path: remote.to_string(),
             transferred,
             total,
@@ -317,7 +318,7 @@ async fn download(
         .await
         .map_err(|e| format!("flush local: {e}"))?;
 
-    let _ = evt_tx.send(Event::TransferFinished {
+    let _ = evt_tx.unbounded_send(Event::TransferFinished {
         path: remote.to_string(),
     });
     Ok(())

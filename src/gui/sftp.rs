@@ -6,7 +6,7 @@
 #![allow(dead_code)]
 
 use crate::ssh::sftp;
-use tokio::sync::mpsc;
+use iced::futures::channel::mpsc;
 
 /// Default initial path used when the drawer first opens.
 pub const DEFAULT_PATH: &str = ".";

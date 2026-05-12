@@ -111,14 +111,12 @@ type SessionSlot = Arc<Mutex<Option<SharedSession>>>;
 pub struct SshSessionHandle {
     pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub resize_tx: tokio_mpsc::UnboundedSender<(u16, u16)>,
-    #[allow(dead_code)] // wired up by the GUI SFTP drawer in a later phase
     session_handle: SessionSlot,
 }
 
 impl SshSessionHandle {
     /// Open a fresh SFTP subsystem channel on the active session.
     /// Errors out if the SSH session has not yet authenticated.
-    #[allow(dead_code)] // wired up by the GUI SFTP drawer in a later phase
     pub async fn open_sftp(&self) -> Result<sftp::SftpHandle, String> {
         let cloned = self
             .session_handle
