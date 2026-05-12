@@ -1,9 +1,4 @@
 //! GUI state for the SFTP drawer attached to an SSH terminal tab.
-//!
-//! Phase 2a defines the persistent state held alongside each `TerminalTab`.
-//! The drawer rendering, lifecycle, and protocol wiring live in subsequent
-//! phases — items below are unused until then.
-#![allow(dead_code)]
 
 use crate::ssh::sftp;
 use iced::futures::channel::mpsc;
@@ -44,6 +39,34 @@ pub struct SftpDrawerState {
     pub height_ratio: f32,
 }
 
+/// Best-effort parent path for the SFTP browser. Returns `None` only when
+/// the current path is already the filesystem root.
+pub fn parent_path(path: &str) -> Option<String> {
+    match path {
+        "/" => None,
+        "" | "." => Some("..".to_string()),
+        _ => {
+            let trimmed = path.trim_end_matches('/');
+            match trimmed.rfind('/') {
+                None => Some(".".to_string()),
+                Some(0) => Some("/".to_string()),
+                Some(i) => Some(trimmed[..i].to_string()),
+            }
+        }
+    }
+}
+
+/// Join a directory entry name onto the current remote path.
+pub fn join_path(base: &str, name: &str) -> String {
+    if base.is_empty() {
+        name.to_string()
+    } else if base == "/" {
+        format!("/{name}")
+    } else {
+        format!("{}/{name}", base.trim_end_matches('/'))
+    }
+}
+
 impl SftpDrawerState {
     pub fn new() -> Self {
         Self {
@@ -59,12 +82,6 @@ impl SftpDrawerState {
         }
     }
 
-    /// Returns true when the worker channel is open and ready to accept
-    /// further commands.
-    pub fn is_connected(&self) -> bool {
-        self.command_tx.is_some()
-    }
-
     /// Reset the drawer's volatile state when the underlying SSH session
     /// drops or the tab is closed.
     pub fn reset(&mut self) {
@@ -75,5 +92,28 @@ impl SftpDrawerState {
         self.entries.clear();
         self.transfers.clear();
         self.command_tx = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{join_path, parent_path};
+
+    #[test]
+    fn parent_handles_common_cases() {
+        assert_eq!(parent_path("/"), None);
+        assert_eq!(parent_path("."), Some("..".to_string()));
+        assert_eq!(parent_path("/home/me"), Some("/home".to_string()));
+        assert_eq!(parent_path("/home"), Some("/".to_string()));
+        assert_eq!(parent_path("/home/me/docs/"), Some("/home/me".to_string()));
+        assert_eq!(parent_path("foo"), Some(".".to_string()));
+    }
+
+    #[test]
+    fn join_handles_common_cases() {
+        assert_eq!(join_path("/", "foo"), "/foo");
+        assert_eq!(join_path("/home", "me"), "/home/me");
+        assert_eq!(join_path("/home/", "me"), "/home/me");
+        assert_eq!(join_path("", "foo"), "foo");
     }
 }

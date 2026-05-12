@@ -165,6 +165,27 @@ impl App {
                     sftp::apply_sftp_event(&mut tab.sftp, event);
                 }
             }
+            Message::SftpNavigate { tab_id, path } => {
+                if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id)
+                    && let Some(tx) = tab.sftp.command_tx.clone()
+                {
+                    tab.sftp.loading = true;
+                    tab.sftp.error = None;
+                    let _ = tx.unbounded_send(crate::ssh::sftp::Command::List(path));
+                }
+            }
+            Message::SftpRefresh => {
+                if self.active_tab != SETTINGS_TAB_INDEX
+                    && let Some(tab) = self.tabs.get_mut(self.active_tab)
+                    && let Some(tx) = tab.sftp.command_tx.clone()
+                {
+                    tab.sftp.loading = true;
+                    tab.sftp.error = None;
+                    let _ = tx.unbounded_send(crate::ssh::sftp::Command::List(
+                        tab.sftp.current_path.clone(),
+                    ));
+                }
+            }
             Message::ShowTabContextMenu(index) => {
                 self.tab_context_menu = Some(index);
             }

@@ -179,9 +179,10 @@ impl App {
             let height_ratio = active_tab.sftp.height_ratio.clamp(0.15, 0.85);
             let bottom_portion = ((height_ratio * 1000.0).round() as u16).max(1);
             let top_portion = 1000u16.saturating_sub(bottom_portion).max(1);
-            let drawer_panel = container(sftp::drawer(&active_tab.sftp, self.palette))
-                .width(Length::Fill)
-                .height(Length::FillPortion(bottom_portion));
+            let drawer_panel =
+                container(sftp::drawer(&active_tab.sftp, active_tab.id, self.palette))
+                    .width(Length::Fill)
+                    .height(Length::FillPortion(bottom_portion));
             let overlay = column![
                 iced::widget::Space::new().height(Length::FillPortion(top_portion)),
                 drawer_panel,

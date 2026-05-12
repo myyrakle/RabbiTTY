@@ -61,6 +61,11 @@ pub enum Message {
         tab_id: u64,
         event: crate::ssh::sftp::Event,
     },
+    SftpNavigate {
+        tab_id: u64,
+        path: String,
+    },
+    SftpRefresh,
     ShowTabContextMenu(usize),
     CloseTabContextMenu,
     CursorMoved(iced::Point),

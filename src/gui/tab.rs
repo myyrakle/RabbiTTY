@@ -17,7 +17,6 @@ pub struct TerminalTab {
     pub shell: ShellKind,
     pub session: TerminalSession,
     pub selection: Option<Selection>,
-    #[allow(dead_code)] // wired up by the SFTP drawer in a later phase
     pub sftp: SftpDrawerState,
     engine: TerminalEngine,
 }
