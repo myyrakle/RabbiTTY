@@ -4,7 +4,7 @@ use crate::gui::settings::{
 };
 use crate::gui::tab::{ShellKind, TerminalTab, discover_available_shells};
 use crate::session::OutputEvent;
-use crate::session_history::SessionHistory;
+use crate::session::history::SessionHistory;
 use crate::terminal::font::discover_system_terminal_fonts;
 use iced::Animation;
 use iced::Size;
@@ -48,6 +48,44 @@ pub enum Message {
     CreateSshTab(usize),
     LaunchFromHistory(usize),
     DuplicateTab,
+    SftpToggleDrawer,
+    SftpOpenSucceeded {
+        tab_id: u64,
+        command_tx: iced::futures::channel::mpsc::UnboundedSender<crate::ssh::sftp::Command>,
+    },
+    SftpOpenFailed {
+        tab_id: u64,
+        error: String,
+    },
+    SftpEvent {
+        tab_id: u64,
+        event: crate::ssh::sftp::Event,
+    },
+    SftpNavigate {
+        tab_id: u64,
+        path: String,
+    },
+    SftpRefresh,
+    SftpRequestUpload,
+    SftpUploadPicked {
+        tab_id: u64,
+        files: Vec<std::path::PathBuf>,
+    },
+    SftpRequestDownload {
+        tab_id: u64,
+        remote: String,
+        suggested_name: String,
+    },
+    SftpDownloadPicked {
+        tab_id: u64,
+        remote: String,
+        local: std::path::PathBuf,
+    },
+    SftpCancelTransfer,
+    SftpDismissTransfer {
+        tab_id: u64,
+        path: String,
+    },
     ShowTabContextMenu(usize),
     CloseTabContextMenu,
     CursorMoved(iced::Point),

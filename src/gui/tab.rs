@@ -1,4 +1,5 @@
 use crate::config::SshProfile;
+use crate::gui::sftp::SftpDrawerState;
 use crate::session::{LaunchSpec, OutputEvent, Session, SessionError};
 use crate::terminal::{CellVisual, Selection, TerminalEngine, TerminalSize, TerminalTheme};
 use iced::futures::channel::mpsc;
@@ -16,6 +17,7 @@ pub struct TerminalTab {
     pub shell: ShellKind,
     pub session: TerminalSession,
     pub selection: Option<Selection>,
+    pub sftp: SftpDrawerState,
     engine: TerminalEngine,
 }
 
@@ -79,6 +81,7 @@ impl TerminalTab {
             shell,
             session,
             selection: None,
+            sftp: SftpDrawerState::new(),
             engine,
         }
     }

@@ -10,7 +10,8 @@ use iced::{Event, Subscription, event, keyboard, mouse, time, window};
 impl App {
     pub fn subscription(&self) -> Subscription<Message> {
         let now = Instant::now();
-        let has_animation = self.shell_picker_anim.is_animating(now);
+        let has_animation = self.shell_picker_anim.is_animating(now)
+            || self.tabs.iter().any(|tab| tab.sftp.anim.is_animating(now));
 
         let animation_tick = if has_animation {
             time::every(std::time::Duration::from_millis(16)).map(|_| Message::AnimationTick)

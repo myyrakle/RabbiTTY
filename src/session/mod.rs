@@ -1,3 +1,5 @@
+pub mod history;
+
 use alacritty_terminal::event::{OnResize, WindowSize};
 use alacritty_terminal::tty::{self, Options, Shell};
 #[cfg(windows)]
@@ -32,6 +34,9 @@ pub struct Session {
     reader: Option<JoinHandle<()>>,
     /// For native SSH sessions: send resize events to the async task.
     resize_tx: Option<tokio::sync::mpsc::UnboundedSender<(u16, u16)>>,
+    /// For native SSH sessions: handle that can open additional channels
+    /// (e.g., SFTP subsystem) on the active connection.
+    ssh: Option<crate::ssh::SshSessionHandle>,
 }
 
 #[derive(Debug, Clone)]
@@ -153,6 +158,7 @@ impl Session {
             pty: Some(pty),
             reader: Some(reader_handle),
             resize_tx: None,
+            ssh: None,
         })
     }
 
@@ -224,6 +230,7 @@ impl Session {
             shutdown: Some(shutdown),
             reader: Some(reader_handle),
             resize_tx: None,
+            ssh: None,
         })
     }
 
@@ -236,7 +243,7 @@ impl Session {
     ) -> Self {
         let handle = crate::ssh::spawn_ssh_session(profile, tab_id, rows, cols, output_tx);
         Self {
-            writer: handle.writer,
+            writer: Arc::clone(&handle.writer),
             #[cfg(unix)]
             pty: None,
             #[cfg(windows)]
@@ -244,8 +251,15 @@ impl Session {
             #[cfg(windows)]
             shutdown: None,
             reader: None,
-            resize_tx: Some(handle.resize_tx),
+            resize_tx: Some(handle.resize_tx.clone()),
+            ssh: Some(handle),
         }
+    }
+
+    /// Returns the underlying SSH session handle when this session was spawned
+    /// via `spawn_ssh`. Local PTY sessions return `None`.
+    pub fn ssh_handle(&self) -> Option<&crate::ssh::SshSessionHandle> {
+        self.ssh.as_ref()
     }
 
     pub fn send_bytes(&self, bytes: &[u8]) -> Result<(), SessionError> {

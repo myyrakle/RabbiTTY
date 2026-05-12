@@ -1,3 +1,6 @@
+mod ansi;
+pub mod sftp;
+
 use crate::config::{SshAuthMethod, SshProfile};
 use crate::session::OutputEvent;
 use async_trait::async_trait;
@@ -12,8 +15,6 @@ use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::mpsc as tokio_mpsc;
-
-use crate::ansi;
 
 fn ssh_badge() -> String {
     ansi::badge("SSH")
@@ -102,9 +103,35 @@ impl Drop for ProxyCommandStream {
 }
 
 // ── Public API ──────────────────────────────────────────────────────
+type SharedSession = Arc<client::Handle<SshHandler>>;
+type SessionSlot = Arc<Mutex<Option<SharedSession>>>;
+
+#[derive(Clone)]
 pub struct SshSessionHandle {
     pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub resize_tx: tokio_mpsc::UnboundedSender<(u16, u16)>,
+    session_handle: SessionSlot,
+}
+
+impl SshSessionHandle {
+    /// Open a fresh SFTP subsystem channel on the active session.
+    /// Errors out if the SSH session has not yet authenticated.
+    pub async fn open_sftp(&self) -> Result<sftp::SftpHandle, String> {
+        let cloned = self
+            .session_handle
+            .lock()
+            .map_err(|_| "session slot poisoned".to_string())?
+            .clone();
+        let Some(handle) = cloned else {
+            return Err("ssh session is not connected".into());
+        };
+        let mut channel = handle
+            .channel_open_session()
+            .await
+            .map_err(|e| format!("open channel: {e}"))?;
+        sftp::request_sftp(&mut channel).await?;
+        sftp::spawn_worker(channel).await
+    }
 }
 
 pub fn spawn_ssh_session(
@@ -121,6 +148,8 @@ pub fn spawn_ssh_session(
         tx: initial_write_tx,
     })));
     let writer_handle = Arc::clone(&writer);
+    let session_handle: SessionSlot = Arc::new(Mutex::new(None));
+    let slot_for_task = Arc::clone(&session_handle);
 
     tokio::spawn(async move {
         let mut otx = output_tx;
@@ -144,8 +173,13 @@ pub fn spawn_ssh_session(
                 attempt_write_rx,
                 &mut resize_rx,
                 &mut otx,
+                &slot_for_task,
             )
             .await;
+
+            if let Ok(mut guard) = slot_for_task.lock() {
+                *guard = None;
+            }
 
             let msg = match &result {
                 Ok(()) => format!(
@@ -177,7 +211,11 @@ pub fn spawn_ssh_session(
         let _ = otx.unbounded_send(OutputEvent::Closed { tab_id });
     });
 
-    SshSessionHandle { writer, resize_tx }
+    SshSessionHandle {
+        writer,
+        resize_tx,
+        session_handle,
+    }
 }
 
 pub async fn test_ssh_connection(
@@ -242,6 +280,7 @@ fn send_status(output_tx: &mut futures_mpsc::UnboundedSender<OutputEvent>, tab_i
 }
 
 // ── Main SSH task ───────────────────────────────────────────────────
+#[allow(clippy::too_many_arguments)]
 async fn ssh_task(
     mut profile: SshProfile,
     tab_id: u64,
@@ -250,6 +289,7 @@ async fn ssh_task(
     mut write_rx: tokio_mpsc::UnboundedReceiver<Vec<u8>>,
     resize_rx: &mut tokio_mpsc::UnboundedReceiver<(u16, u16)>,
     output_tx: &mut futures_mpsc::UnboundedSender<OutputEvent>,
+    session_slot: &SessionSlot,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let badge = ssh_badge();
 
@@ -375,6 +415,11 @@ async fn ssh_task(
 
     if !authenticated {
         return Err("Authentication failed".into());
+    }
+
+    let session = Arc::new(session);
+    if let Ok(mut guard) = session_slot.lock() {
+        *guard = Some(Arc::clone(&session));
     }
 
     // --- Connected ---

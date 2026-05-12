@@ -1,6 +1,7 @@
 #[cfg(target_os = "macos")]
 mod dialog;
 mod settings;
+mod sftp;
 mod shell_picker;
 
 #[cfg(target_os = "macos")]
@@ -43,10 +44,19 @@ impl App {
         let ui_alpha = self.config.theme.background_opacity;
         let bar_alpha = (ui_alpha * 0.9).clamp(0.0, 1.0);
         let tab_alpha = (ui_alpha * 0.6).clamp(0.0, 1.0);
+        let sftp_toggle = if self.active_tab != SETTINGS_TAB_INDEX {
+            self.tabs.get(self.active_tab).and_then(|tab| {
+                matches!(tab.shell, crate::gui::tab::ShellKind::Ssh(_))
+                    .then_some((Message::SftpToggleDrawer, tab.sftp.open))
+            })
+        } else {
+            None
+        };
         let tab_row = tab_bar(
             tabs_iter,
             Message::OpenShellPicker,
             Message::OpenSettingsTab,
+            sftp_toggle,
             bar_alpha,
             tab_alpha,
             self.dragging_tab,
@@ -165,7 +175,38 @@ impl App {
             terminal_widget.into()
         };
 
-        ImeEnabled::new(terminal_view)
+        let now = iced::time::Instant::now();
+        let drawer_progress: f32 = active_tab
+            .sftp
+            .anim
+            .interpolate(0.0f32, 1.0f32, now)
+            .clamp(0.0, 1.0);
+        let drawer_visible = active_tab.sftp.open || drawer_progress > 0.001;
+        let with_drawer: Element<Message> = if drawer_visible {
+            let height_ratio = active_tab.sftp.height_ratio.clamp(0.15, 0.85);
+            let effective = (height_ratio * drawer_progress).clamp(0.0, height_ratio);
+            let bottom_portion = ((effective * 1000.0).round() as u16).max(1);
+            let top_portion = 1000u16.saturating_sub(bottom_portion).max(1);
+            let drawer_panel =
+                container(sftp::drawer(&active_tab.sftp, active_tab.id, self.palette))
+                    .width(Length::Fill)
+                    .height(Length::FillPortion(bottom_portion))
+                    .clip(true);
+            let overlay = column![
+                iced::widget::Space::new().height(Length::FillPortion(top_portion)),
+                drawer_panel,
+            ]
+            .width(Length::Fill)
+            .height(Length::Fill);
+            stack![terminal_view, overlay]
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        } else {
+            terminal_view
+        };
+
+        ImeEnabled::new(with_drawer)
             .preedit(self.ime_preedit.clone())
             .into()
     }
@@ -210,11 +251,11 @@ impl App {
             for (i, entry) in self.session_history.entries.iter().enumerate() {
                 let name = entry.display_name.clone();
                 let kind_label = match &entry.kind {
-                    crate::session_history::SessionKind::Default => {
+                    crate::session::history::SessionKind::Default => {
                         t!("session_kind.default_shell")
                     }
-                    crate::session_history::SessionKind::Shell { .. } => t!("session_kind.shell"),
-                    crate::session_history::SessionKind::Ssh { .. } => t!("session_kind.ssh"),
+                    crate::session::history::SessionKind::Shell { .. } => t!("session_kind.shell"),
+                    crate::session::history::SessionKind::Ssh { .. } => t!("session_kind.ssh"),
                 };
 
                 let label_col = column![
