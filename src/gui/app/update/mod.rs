@@ -130,12 +130,8 @@ impl App {
                     && matches!(tab.shell, ShellKind::Ssh(_))
                 {
                     let was_open = tab.sftp.open;
-                    let now = Instant::now();
-                    tab.sftp.anim.go_mut(!was_open, now);
-                    if was_open {
-                        // Keep `open` true while the close animation plays;
-                        // AnimationTick clears it once the animation settles.
-                    } else {
+                    tab.sftp.anim.go_mut(!was_open, Instant::now());
+                    if !was_open {
                         tab.sftp.open = true;
                     }
                     if !was_open

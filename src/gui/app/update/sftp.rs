@@ -1,5 +1,4 @@
-//! SFTP drawer wiring — opens the protocol channel and bridges the worker's
-//! event stream into iced messages.
+//! SFTP drawer wiring.
 
 use super::super::Message;
 use crate::gui::sftp::{SftpDrawerState, TransferRow};
@@ -16,11 +15,6 @@ enum OpenState {
     Done,
 }
 
-/// Open an SFTP subsystem and stream its protocol events as iced messages.
-///
-/// Emits `SftpOpenSucceeded` (carrying the command sender) on success,
-/// followed by `SftpEvent` for every worker event until the channel closes.
-/// On failure, emits a single `SftpOpenFailed`.
 pub(super) fn open_sftp_stream(ssh: SshSessionHandle, tab_id: u64) -> Task<Message> {
     let s = stream::unfold(OpenState::Initial(ssh), move |state| async move {
         match state {
@@ -49,7 +43,6 @@ pub(super) fn open_sftp_stream(ssh: SshSessionHandle, tab_id: u64) -> Task<Messa
     Task::stream(s)
 }
 
-/// Apply a single SFTP worker event to the drawer state.
 pub(super) fn apply_sftp_event(state: &mut SftpDrawerState, event: sftp::Event) {
     match event {
         sftp::Event::Listed { path, entries } => {

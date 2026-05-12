@@ -1,17 +1,8 @@
-//! SFTP client worker — operates over an already-established russh channel.
-//!
-//! The caller opens a russh `Channel<Msg>` on the active SSH session and
-//! requests the `sftp` subsystem; this module wraps the resulting stream with
-//! `russh_sftp::client::SftpSession` and translates GUI commands into protocol
-//! calls, emitting progress and result events back over mpsc channels.
-//!
-//! Phase 1 only defines the protocol layer — the GUI integration lives in a
-//! later phase, so the items below are unused for now.
+//! SFTP worker over a russh `sftp` subsystem channel.
 #![allow(dead_code)]
 
 use iced::futures::StreamExt;
 use iced::futures::channel::mpsc;
-use russh::ChannelMsg;
 use russh::client::Msg;
 use russh_sftp::client::SftpSession;
 use russh_sftp::protocol::FileType;
@@ -74,10 +65,6 @@ pub struct SftpHandle {
     pub rx: mpsc::UnboundedReceiver<Event>,
 }
 
-/// Run an SFTP worker over the supplied russh channel.
-///
-/// The channel must already have the `sftp` subsystem requested. Returns a
-/// `SftpHandle` whose `tx` accepts commands and whose `rx` receives events.
 pub async fn spawn_worker(channel: russh::Channel<Msg>) -> Result<SftpHandle, String> {
     let (cmd_tx, cmd_rx) = mpsc::unbounded::<Command>();
     let (evt_tx, evt_rx) = mpsc::unbounded::<Event>();
@@ -324,25 +311,13 @@ async fn download(
     Ok(())
 }
 
-/// Open the SFTP subsystem on a russh channel.
-///
-/// Caller obtains the channel via `session.channel_open_session().await?`,
-/// then passes it here. The returned channel is ready to be wrapped by
-/// `spawn_worker`.
 pub async fn request_sftp(channel: &mut russh::Channel<Msg>) -> Result<(), String> {
     channel
         .request_subsystem(true, "sftp")
         .await
         .map_err(|e| format!("request sftp subsystem: {e}"))?;
-    // Drain any reply messages until the subsystem ack settles. russh's
-    // `request_subsystem(want_reply=true)` already waits for SUCCESS/FAILURE,
-    // but some servers send no banner; we just return now.
     Ok(())
 }
-
-/// Silence unused warning for `ChannelMsg` while integration is pending.
-#[allow(dead_code)]
-fn _bind_channel_msg(_msg: ChannelMsg) {}
 
 #[cfg(test)]
 mod tests {
