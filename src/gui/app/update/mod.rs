@@ -164,8 +164,32 @@ impl App {
                 }
             }
             Message::SftpEvent { tab_id, event } => {
+                let finished_path =
+                    if let crate::ssh::sftp::Event::TransferFinished { path } = &event {
+                        Some(path.clone())
+                    } else {
+                        None
+                    };
                 if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
                     sftp::apply_sftp_event(&mut tab.sftp, event);
+                }
+                if let Some(path) = finished_path {
+                    return Task::perform(
+                        async {
+                            std::thread::sleep(std::time::Duration::from_millis(1500));
+                        },
+                        move |()| Message::SftpDismissTransfer {
+                            tab_id,
+                            path: path.clone(),
+                        },
+                    );
+                }
+            }
+            Message::SftpDismissTransfer { tab_id, path } => {
+                if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
+                    tab.sftp
+                        .transfers
+                        .retain(|t| !(t.finished && t.path == path));
                 }
             }
             Message::SftpNavigate { tab_id, path } => {

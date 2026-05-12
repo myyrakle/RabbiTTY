@@ -82,6 +82,10 @@ pub enum Message {
         local: std::path::PathBuf,
     },
     SftpCancelTransfer,
+    SftpDismissTransfer {
+        tab_id: u64,
+        path: String,
+    },
     ShowTabContextMenu(usize),
     CloseTabContextMenu,
     CursorMoved(iced::Point),
