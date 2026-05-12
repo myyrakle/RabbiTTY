@@ -61,6 +61,10 @@ pub(super) fn apply_sftp_event(state: &mut SftpDrawerState, event: sftp::Event) 
                     finished: false,
                 },
             );
+            const TRANSFER_HISTORY_CAP: usize = 8;
+            if state.transfers.len() > TRANSFER_HISTORY_CAP {
+                state.transfers.truncate(TRANSFER_HISTORY_CAP);
+            }
         }
         sftp::Event::TransferProgress {
             path,

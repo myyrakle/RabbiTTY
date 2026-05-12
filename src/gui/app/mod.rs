@@ -66,6 +66,22 @@ pub enum Message {
         path: String,
     },
     SftpRefresh,
+    SftpRequestUpload,
+    SftpUploadPicked {
+        tab_id: u64,
+        files: Vec<std::path::PathBuf>,
+    },
+    SftpRequestDownload {
+        tab_id: u64,
+        remote: String,
+        suggested_name: String,
+    },
+    SftpDownloadPicked {
+        tab_id: u64,
+        remote: String,
+        local: std::path::PathBuf,
+    },
+    SftpCancelTransfer,
     ShowTabContextMenu(usize),
     CloseTabContextMenu,
     CursorMoved(iced::Point),

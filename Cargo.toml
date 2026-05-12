@@ -49,6 +49,7 @@ russh = "0.48"
 russh-keys = "0.48"
 russh-sftp = "2.1"
 async-trait = "0.1"
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
 tokio = { version = "1", default-features = false, features = ["io-util", "process", "sync", "fs", "rt"] }
 
 # Windows-specific (custom titlebar with resize border)

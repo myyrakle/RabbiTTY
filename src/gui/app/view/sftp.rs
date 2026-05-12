@@ -1,10 +1,10 @@
 //! SFTP drawer rendering.
 
 use crate::gui::app::Message;
-use crate::gui::sftp::{self, SftpDrawerState};
+use crate::gui::sftp::{self, SftpDrawerState, TransferRow};
 use crate::gui::theme::{Palette, RADIUS_NORMAL, RADIUS_SMALL, SPACING_NORMAL, SPACING_SMALL};
 use crate::ssh::sftp::Entry;
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{Space, button, column, container, progress_bar, row, scrollable, text};
 use iced::{Alignment, Background, Border, Color, Element, Length, Shadow, Theme, Vector};
 
 const ROW_HEIGHT: f32 = 24.0;
@@ -28,40 +28,41 @@ pub fn drawer<'a>(
         });
     let body = drawer_body(state, tab_id, palette);
 
-    container(
-        column(vec![header, separator.into(), body])
-            .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .padding([SPACING_SMALL, SPACING_NORMAL])
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .style(move |_theme: &Theme| container::Style {
-        background: Some(Background::Color(Color {
-            a: 0.98,
-            ..palette.surface
-        })),
-        border: Border {
-            radius: iced::border::Radius {
-                top_left: RADIUS_NORMAL,
-                top_right: RADIUS_NORMAL,
-                bottom_right: 0.0,
-                bottom_left: 0.0,
+    let mut layers: Vec<Element<Message>> = vec![header, separator.into(), body];
+    if !state.transfers.is_empty() {
+        layers.push(transfer_strip(state, palette));
+    }
+
+    container(column(layers).width(Length::Fill).height(Length::Fill))
+        .padding([SPACING_SMALL, SPACING_NORMAL])
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(move |_theme: &Theme| container::Style {
+            background: Some(Background::Color(Color {
+                a: 0.98,
+                ..palette.surface
+            })),
+            border: Border {
+                radius: iced::border::Radius {
+                    top_left: RADIUS_NORMAL,
+                    top_right: RADIUS_NORMAL,
+                    bottom_right: 0.0,
+                    bottom_left: 0.0,
+                },
+                width: 0.0,
+                color: Color::TRANSPARENT,
             },
-            width: 0.0,
-            color: Color::TRANSPARENT,
-        },
-        shadow: Shadow {
-            color: Color {
-                a: 0.3,
-                ..Color::BLACK
+            shadow: Shadow {
+                color: Color {
+                    a: 0.3,
+                    ..Color::BLACK
+                },
+                offset: Vector::new(0.0, -2.0),
+                blur_radius: 12.0,
             },
-            offset: Vector::new(0.0, -2.0),
-            blur_radius: 12.0,
-        },
-        ..Default::default()
-    })
-    .into()
+            ..Default::default()
+        })
+        .into()
 }
 
 fn drawer_header<'a>(state: &'a SftpDrawerState, palette: Palette) -> Element<'a, Message> {
@@ -116,6 +117,10 @@ fn drawer_header<'a>(state: &'a SftpDrawerState, palette: Palette) -> Element<'a
         shadow: Shadow::default(),
         snap: true,
     };
+    let upload_btn = button(text("\u{2191}").size(12))
+        .on_press(Message::SftpRequestUpload)
+        .padding([3, 8])
+        .style(icon_style);
     let refresh_btn = button(text("\u{27F3}").size(12))
         .on_press(Message::SftpRefresh)
         .padding([3, 8])
@@ -130,6 +135,7 @@ fn drawer_header<'a>(state: &'a SftpDrawerState, palette: Palette) -> Element<'a
             path_label,
             Space::new().width(Length::Fill),
             status_el,
+            upload_btn,
             refresh_btn,
             close_btn,
         ]
@@ -272,8 +278,17 @@ fn entry_row<'a>(
     .spacing(SPACING_NORMAL)
     .align_y(Alignment::Center);
 
-    let target_path = if entry.is_dir {
-        Some(sftp::join_path(&state.current_path, &entry.name))
+    let press_msg = if entry.is_dir {
+        Some(Message::SftpNavigate {
+            tab_id,
+            path: sftp::join_path(&state.current_path, &entry.name),
+        })
+    } else if !entry.is_symlink {
+        Some(Message::SftpRequestDownload {
+            tab_id,
+            remote: sftp::join_path(&state.current_path, &entry.name),
+            suggested_name: entry.name.clone(),
+        })
     } else {
         None
     };
@@ -285,8 +300,8 @@ fn entry_row<'a>(
         .width(Length::Fill)
         .height(Length::Fixed(ROW_HEIGHT))
         .style(row_style);
-    if let Some(path) = target_path {
-        btn = btn.on_press(Message::SftpNavigate { tab_id, path });
+    if let Some(msg) = press_msg {
+        btn = btn.on_press(msg);
     }
     btn.into()
 }
@@ -309,6 +324,135 @@ fn row_style_factory(palette: Palette) -> impl Fn(&Theme, button::Status) -> but
         shadow: Shadow::default(),
         snap: true,
     }
+}
+
+fn transfer_strip<'a>(state: &'a SftpDrawerState, palette: Palette) -> Element<'a, Message> {
+    let separator = container("")
+        .width(Length::Fill)
+        .height(Length::Fixed(1.0))
+        .style(move |_theme: &Theme| container::Style {
+            background: Some(Background::Color(Color {
+                a: 0.08,
+                ..palette.text
+            })),
+            ..Default::default()
+        });
+
+    let rows: Vec<Element<Message>> = state
+        .transfers
+        .iter()
+        .map(|row| transfer_row(row, palette))
+        .collect();
+
+    column![
+        separator,
+        column(rows)
+            .spacing(2)
+            .padding([4.0, 0.0])
+            .width(Length::Fill),
+    ]
+    .width(Length::Fill)
+    .into()
+}
+
+fn transfer_row<'a>(row_state: &'a TransferRow, palette: Palette) -> Element<'a, Message> {
+    let name = row_state.path.rsplit('/').next().unwrap_or(&row_state.path);
+    let progress = if row_state.total > 0 {
+        (row_state.transferred as f32 / row_state.total as f32).clamp(0.0, 1.0)
+    } else if row_state.finished {
+        1.0
+    } else {
+        0.0
+    };
+    let percent = (progress * 100.0).round() as u32;
+    let bytes_text = if row_state.total > 0 {
+        format!(
+            "{} / {}",
+            humanize_bytes(row_state.transferred),
+            humanize_bytes(row_state.total)
+        )
+    } else {
+        humanize_bytes(row_state.transferred)
+    };
+
+    let bar = progress_bar(0.0..=1.0, progress)
+        .girth(Length::Fixed(4.0))
+        .style(move |_theme: &Theme| iced::widget::progress_bar::Style {
+            background: Background::Color(Color {
+                a: 0.12,
+                ..palette.text
+            }),
+            bar: Background::Color(palette.accent),
+            border: Border {
+                radius: 2.0.into(),
+                width: 0.0,
+                color: Color::TRANSPARENT,
+            },
+        });
+
+    let status_marker: Element<Message> = if row_state.finished {
+        text("\u{2713}")
+            .size(12)
+            .color(Color {
+                a: 0.7,
+                ..palette.accent
+            })
+            .into()
+    } else {
+        let cancel_style = move |_theme: &Theme, status: button::Status| button::Style {
+            background: Some(Background::Color(match status {
+                button::Status::Hovered => Color {
+                    a: 0.12,
+                    ..palette.text
+                },
+                _ => Color::TRANSPARENT,
+            })),
+            text_color: Color {
+                a: 0.55,
+                ..palette.text
+            },
+            border: Border {
+                radius: RADIUS_SMALL.into(),
+                width: 0.0,
+                color: Color::TRANSPARENT,
+            },
+            shadow: Shadow::default(),
+            snap: true,
+        };
+        button(text("\u{2715}").size(10))
+            .on_press(Message::SftpCancelTransfer)
+            .padding([2, 6])
+            .style(cancel_style)
+            .into()
+    };
+
+    container(
+        column![
+            row![
+                text(name).size(11).color(Color {
+                    a: 0.85,
+                    ..palette.text
+                }),
+                Space::new().width(Length::Fill),
+                text(format!("{percent}%")).size(11).color(Color {
+                    a: 0.6,
+                    ..palette.text
+                }),
+                text(bytes_text).size(11).color(Color {
+                    a: 0.45,
+                    ..palette.text
+                }),
+                status_marker,
+            ]
+            .spacing(SPACING_SMALL)
+            .align_y(Alignment::Center),
+            bar,
+        ]
+        .spacing(3),
+    )
+    .padding([4.0, SPACING_SMALL])
+    .width(Length::Fill)
+    .into()
 }
 
 fn humanize_bytes(bytes: u64) -> String {

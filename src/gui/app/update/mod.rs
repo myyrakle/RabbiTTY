@@ -189,6 +189,93 @@ impl App {
                     ));
                 }
             }
+            Message::SftpRequestUpload => {
+                if self.active_tab != SETTINGS_TAB_INDEX
+                    && let Some(tab) = self.tabs.get(self.active_tab)
+                    && matches!(tab.shell, ShellKind::Ssh(_))
+                {
+                    let tab_id = tab.id;
+                    return Task::perform(
+                        async move {
+                            rfd::AsyncFileDialog::new()
+                                .pick_files()
+                                .await
+                                .map(|files| {
+                                    files
+                                        .into_iter()
+                                        .map(|f| f.path().to_path_buf())
+                                        .collect::<Vec<_>>()
+                                })
+                                .unwrap_or_default()
+                        },
+                        move |files| Message::SftpUploadPicked { tab_id, files },
+                    );
+                }
+            }
+            Message::SftpUploadPicked { tab_id, files } => {
+                if files.is_empty() {
+                    return Task::none();
+                }
+                if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id)
+                    && let Some(tx) = tab.sftp.command_tx.clone()
+                {
+                    let base = tab.sftp.current_path.clone();
+                    for local in files {
+                        let name = local
+                            .file_name()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("upload")
+                            .to_string();
+                        let remote = crate::gui::sftp::join_path(&base, &name);
+                        let _ =
+                            tx.unbounded_send(crate::ssh::sftp::Command::Upload { local, remote });
+                    }
+                }
+            }
+            Message::SftpRequestDownload {
+                tab_id,
+                remote,
+                suggested_name,
+            } => {
+                return Task::perform(
+                    async move {
+                        let local = rfd::AsyncFileDialog::new()
+                            .set_file_name(&suggested_name)
+                            .save_file()
+                            .await
+                            .map(|f| f.path().to_path_buf());
+                        (remote, local)
+                    },
+                    move |(remote, local)| match local {
+                        Some(local) => Message::SftpDownloadPicked {
+                            tab_id,
+                            remote,
+                            local,
+                        },
+                        None => Message::Noop,
+                    },
+                );
+            }
+            Message::SftpDownloadPicked {
+                tab_id,
+                remote,
+                local,
+            } => {
+                if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id)
+                    && let Some(tx) = tab.sftp.command_tx.clone()
+                {
+                    let _ =
+                        tx.unbounded_send(crate::ssh::sftp::Command::Download { remote, local });
+                }
+            }
+            Message::SftpCancelTransfer => {
+                if self.active_tab != SETTINGS_TAB_INDEX
+                    && let Some(tab) = self.tabs.get_mut(self.active_tab)
+                    && let Some(tx) = tab.sftp.command_tx.clone()
+                {
+                    let _ = tx.unbounded_send(crate::ssh::sftp::Command::Cancel);
+                }
+            }
             Message::ShowTabContextMenu(index) => {
                 self.tab_context_menu = Some(index);
             }
