@@ -185,11 +185,16 @@ fn drawer_body<'a>(
         rows.push(entry_row(state, tab_id, entry, palette));
     }
 
-    scrollable(column(rows).width(Length::Fill).padding([4.0, 0.0]))
-        .style(crate::gui::theme::scrollbar_style(palette))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    scrollable(column(rows).width(Length::Fill).padding(iced::Padding {
+        top: 4.0,
+        right: 12.0,
+        bottom: 4.0,
+        left: 0.0,
+    }))
+    .style(crate::gui::theme::scrollbar_style(palette))
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
 }
 
 fn centered_message<'a>(msg: &'a str, color: Color, _palette: Palette) -> Element<'a, Message> {
