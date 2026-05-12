@@ -107,6 +107,7 @@ impl Drop for ProxyCommandStream {
 type SharedSession = Arc<client::Handle<SshHandler>>;
 type SessionSlot = Arc<Mutex<Option<SharedSession>>>;
 
+#[derive(Clone)]
 pub struct SshSessionHandle {
     pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub resize_tx: tokio_mpsc::UnboundedSender<(u16, u16)>,
