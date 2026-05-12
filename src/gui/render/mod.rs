@@ -26,6 +26,7 @@ pub struct TerminalProgram {
     pub clear_color: [f32; 4],
     pub selection: Option<Selection>,
     pub mouse_mode: bool,
+    pub display_offset: usize,
 }
 
 impl TerminalProgram {
@@ -53,6 +54,7 @@ impl TerminalProgram {
 pub struct TerminalShaderState {
     dragging: bool,
     drag_start: Option<GridPos>,
+    drag_anchor_offset: usize,
 }
 
 type Message = crate::gui::app::Message;
@@ -84,6 +86,7 @@ impl ShaderProgram<Message> for TerminalProgram {
                     }
                     state.dragging = true;
                     state.drag_start = Some(grid_pos);
+                    state.drag_anchor_offset = self.display_offset;
                     return Some(Action::publish(Message::SelectionChanged(None)).and_capture());
                 }
             }
@@ -102,9 +105,22 @@ impl ShaderProgram<Message> for TerminalProgram {
                     if state.dragging
                         && let Some(start) = state.drag_start
                     {
-                        let end = self.pixel_to_grid(pos, bounds);
+                        let viewport_end = self.pixel_to_grid(pos, bounds);
+                        // Translate the current viewport row back into the anchor frame
+                        // so the selection follows content when the user scrolls.
+                        let delta =
+                            self.display_offset as isize - state.drag_anchor_offset as isize;
+                        let anchored_row = viewport_end.row as isize - delta;
+                        let end = GridPos {
+                            row: anchored_row.max(0) as usize,
+                            col: viewport_end.col,
+                        };
                         if start != end {
-                            let sel = Selection { start, end };
+                            let sel = Selection {
+                                start,
+                                end,
+                                anchor_offset: state.drag_anchor_offset,
+                            };
                             return Some(
                                 Action::publish(Message::SelectionChanged(Some(sel))).and_capture(),
                             );
@@ -158,6 +174,7 @@ impl ShaderProgram<Message> for TerminalProgram {
             terminal_font_selection: self.terminal_font_selection.clone(),
             terminal_font_size: self.terminal_font_size,
             selection: self.selection,
+            display_offset: self.display_offset,
         }
     }
 
@@ -187,6 +204,7 @@ pub struct TerminalPipeline {
     last_offset: [f32; 2],
     last_font_size: f32,
     last_selection: Option<Selection>,
+    last_display_offset: usize,
 }
 
 impl Pipeline for TerminalPipeline {
@@ -202,6 +220,7 @@ impl Pipeline for TerminalPipeline {
             last_offset: [0.0; 2],
             last_font_size: 0.0,
             last_selection: None,
+            last_display_offset: 0,
         }
     }
 }
@@ -216,6 +235,7 @@ pub struct TerminalPrimitive {
     terminal_font_selection: Option<String>,
     terminal_font_size: f32,
     selection: Option<Selection>,
+    display_offset: usize,
 }
 
 impl Primitive for TerminalPrimitive {
@@ -249,7 +269,8 @@ impl Primitive for TerminalPrimitive {
             && viewport == pipeline.last_viewport
             && offset == pipeline.last_offset
             && (font_size - pipeline.last_font_size).abs() < 0.01
-            && self.selection == pipeline.last_selection;
+            && self.selection == pipeline.last_selection
+            && self.display_offset == pipeline.last_display_offset;
 
         if unchanged {
             return;
@@ -262,24 +283,34 @@ impl Primitive for TerminalPrimitive {
         pipeline.last_offset = offset;
         pipeline.last_font_size = font_size;
         pipeline.last_selection = self.selection;
+        pipeline.last_display_offset = self.display_offset;
 
         let cells = self.cells.as_slice();
 
         pipeline
             .bg
             .update_uniforms(queue, cell_size, viewport, offset);
-        pipeline
-            .bg
-            .prepare_instances(device, queue, cells, self.selection.as_ref());
+        pipeline.bg.prepare_instances(
+            device,
+            queue,
+            cells,
+            self.selection.as_ref(),
+            self.display_offset,
+        );
 
         pipeline
             .text
             .apply_terminal_font_selection(device, self.terminal_font_selection.as_deref());
         pipeline.text.set_requested_font_size(font_size);
         pipeline.text.update_uniforms(queue, viewport, offset);
-        pipeline
-            .text
-            .prepare_instances(device, queue, cells, cell_size, self.selection.as_ref());
+        pipeline.text.prepare_instances(
+            device,
+            queue,
+            cells,
+            cell_size,
+            self.selection.as_ref(),
+            self.display_offset,
+        );
     }
 
     fn render(

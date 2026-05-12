@@ -118,9 +118,21 @@ impl TerminalTab {
         let sel = self.selection.as_ref().filter(|s| !s.is_empty())?;
         let cells = self.engine.render_cells();
         let size = self.engine.size();
+        let (current_offset, _) = self.engine.scroll_position();
+        let delta = current_offset as isize - sel.anchor_offset as isize;
         let (start, end) = sel.ordered();
         let mut result = String::new();
         for row in start.row..=end.row {
+            // Selection rows live in the anchor frame; translate to the
+            // current viewport before reading cells.
+            let viewport_row = row as isize + delta;
+            if viewport_row < 0 || viewport_row as usize >= size.lines {
+                if row != end.row {
+                    result.push('\n');
+                }
+                continue;
+            }
+            let viewport_row = viewport_row as usize;
             let col_start = if row == start.row { start.col } else { 0 };
             let col_end = if row == end.row {
                 end.col
@@ -128,7 +140,7 @@ impl TerminalTab {
                 size.columns.saturating_sub(1)
             };
             for col in col_start..=col_end {
-                let idx = row * size.columns + col;
+                let idx = viewport_row * size.columns + col;
                 if let Some(cell) = cells.get(idx) {
                     result.push(cell.ch);
                 }

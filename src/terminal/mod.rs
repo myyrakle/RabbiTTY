@@ -43,6 +43,9 @@ pub struct GridPos {
 pub struct Selection {
     pub start: GridPos,
     pub end: GridPos,
+    /// `display_offset` at the moment the selection was anchored. Selection
+    /// rows are stored in this frame so they follow content during scrolls.
+    pub anchor_offset: usize,
 }
 
 impl Selection {
@@ -56,7 +59,21 @@ impl Selection {
         }
     }
 
-    pub fn contains(&self, row: usize, col: usize) -> bool {
+    /// Translate a current-viewport row back into the selection's anchor frame.
+    fn anchor_row(&self, viewport_row: usize, current_offset: usize) -> Option<usize> {
+        let delta = current_offset as isize - self.anchor_offset as isize;
+        let anchored = viewport_row as isize - delta;
+        if anchored < 0 {
+            None
+        } else {
+            Some(anchored as usize)
+        }
+    }
+
+    pub fn contains_at(&self, viewport_row: usize, col: usize, current_offset: usize) -> bool {
+        let Some(row) = self.anchor_row(viewport_row, current_offset) else {
+            return false;
+        };
         let (start, end) = self.ordered();
         if row < start.row || row > end.row {
             return false;
