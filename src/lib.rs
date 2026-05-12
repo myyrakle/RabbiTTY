@@ -7,5 +7,6 @@ pub mod keychain;
 pub mod platform;
 pub mod session;
 pub mod session_history;
+pub mod sftp;
 pub mod ssh;
 pub mod terminal;

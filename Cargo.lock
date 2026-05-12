@@ -3405,6 +3405,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "russh",
  "russh-keys",
+ "russh-sftp",
  "serde",
  "tokio",
  "toml",
