@@ -45,6 +45,7 @@ pub fn parent_path(path: &str) -> Option<String> {
     match path {
         "/" => None,
         "" | "." => Some("..".to_string()),
+        _ if path == ".." || path.ends_with("/..") => Some(format!("{path}/..")),
         _ => {
             let trimmed = path.trim_end_matches('/');
             match trimmed.rfind('/') {
@@ -103,10 +104,14 @@ mod tests {
     fn parent_handles_common_cases() {
         assert_eq!(parent_path("/"), None);
         assert_eq!(parent_path("."), Some("..".to_string()));
+        assert_eq!(parent_path(".."), Some("../..".to_string()));
+        assert_eq!(parent_path("../.."), Some("../../..".to_string()));
         assert_eq!(parent_path("/home/me"), Some("/home".to_string()));
         assert_eq!(parent_path("/home"), Some("/".to_string()));
         assert_eq!(parent_path("/home/me/docs/"), Some("/home/me".to_string()));
         assert_eq!(parent_path("foo"), Some(".".to_string()));
+        assert_eq!(parent_path("./foo"), Some(".".to_string()));
+        assert_eq!(parent_path("../foo"), Some("..".to_string()));
     }
 
     #[test]
