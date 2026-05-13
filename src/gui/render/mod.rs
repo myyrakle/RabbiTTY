@@ -59,6 +59,16 @@ pub struct TerminalShaderState {
 
 type Message = crate::gui::app::Message;
 
+/// Translate an absolute window-space cursor position into bounds-local
+/// coordinates clamped to the bounds rectangle. Used while dragging so a
+/// selection still updates after the cursor leaves the terminal area.
+fn clamp_to_bounds(absolute: Point, bounds: Rectangle) -> Point {
+    Point::new(
+        (absolute.x - bounds.x).clamp(0.0, bounds.width.max(0.0)),
+        (absolute.y - bounds.y).clamp(0.0, bounds.height.max(0.0)),
+    )
+}
+
 impl ShaderProgram<Message> for TerminalProgram {
     type State = TerminalShaderState;
     type Primitive = TerminalPrimitive;
@@ -91,8 +101,19 @@ impl ShaderProgram<Message> for TerminalProgram {
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                if let Some(pos) = cursor.position_in(bounds) {
-                    if self.mouse_mode && state.dragging {
+                // Use the absolute cursor position while dragging so the selection
+                // still extends after the cursor leaves the terminal bounds.
+                let pos_in = cursor.position_in(bounds);
+                let pos_dragging = state.dragging.then(|| {
+                    pos_in.unwrap_or_else(|| {
+                        cursor
+                            .position()
+                            .map(|p| clamp_to_bounds(p, bounds))
+                            .unwrap_or(Point::ORIGIN)
+                    })
+                });
+                if let Some(pos) = pos_dragging {
+                    if self.mouse_mode {
                         let grid_pos = self.pixel_to_grid(pos, bounds);
                         return Some(
                             Action::publish(Message::TerminalMouseDrag {
@@ -102,9 +123,7 @@ impl ShaderProgram<Message> for TerminalProgram {
                             .and_capture(),
                         );
                     }
-                    if state.dragging
-                        && let Some(drag_start) = state.drag_start
-                    {
+                    if let Some(drag_start) = state.drag_start {
                         let viewport_end = self.pixel_to_grid(pos, bounds);
                         // Translate the current viewport row back into the anchor frame
                         // so the selection follows content when the user scrolls.
