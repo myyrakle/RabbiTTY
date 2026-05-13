@@ -56,19 +56,30 @@ impl App {
     }
 
     pub(in crate::gui) fn session_ssh_profiles(&self) -> Vec<SshProfile> {
-        if self.settings_open {
-            let draft_profiles: Vec<SshProfile> = self
+        let mut profiles: Vec<SshProfile> = if self.settings_open {
+            let draft: Vec<SshProfile> = self
                 .settings_draft
                 .ssh_profiles
                 .iter()
                 .filter_map(|profile| profile.to_profile())
                 .collect();
-            if !draft_profiles.is_empty() {
-                return draft_profiles;
+            if draft.is_empty() {
+                self.config.ssh_profiles.clone()
+            } else {
+                draft
+            }
+        } else {
+            self.config.ssh_profiles.clone()
+        };
+
+        // ~/.ssh/config-derived hosts join the list, but a user-created profile
+        // with the same name wins.
+        for cfg_profile in &self.ssh_config_profiles {
+            if !profiles.iter().any(|p| p.name == cfg_profile.name) {
+                profiles.push(cfg_profile.clone());
             }
         }
-
-        self.config.ssh_profiles.clone()
+        profiles
     }
 
     pub(super) fn shift_shell_picker_selection(&mut self, delta: isize) {
