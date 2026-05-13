@@ -162,7 +162,7 @@ impl App {
                     Message::TerminalScroll(rel.y)
                 })
                 .style(crate::gui::theme::scrollbar_style(self.palette))
-                .width(Length::Fixed(14.0))
+                .width(Length::Fixed(8.0))
                 .height(Length::Fill);
 
             row![terminal_widget, scrollbar]
