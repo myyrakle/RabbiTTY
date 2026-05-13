@@ -186,6 +186,9 @@ pub struct App {
     #[cfg(target_os = "macos")]
     pub(super) pending_save_on_restart: bool,
     pub(super) config_save_tx: std_mpsc::Sender<AppConfig>,
+    /// Profiles parsed from `~/.ssh/config`, merged into shell/SSH lists at
+    /// runtime so users do not have to re-enter them in Settings.
+    pub(super) ssh_config_profiles: Vec<crate::config::SshProfile>,
 }
 
 fn spawn_config_save_worker() -> std_mpsc::Sender<AppConfig> {
@@ -259,6 +262,7 @@ impl App {
             #[cfg(target_os = "macos")]
             pending_save_on_restart: false,
             config_save_tx: spawn_config_save_worker(),
+            ssh_config_profiles: crate::ssh::user_config::load(),
         }
     }
 
