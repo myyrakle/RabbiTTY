@@ -128,7 +128,7 @@ fn content<'a>(
     if !ssh_config_profiles.is_empty() {
         items.push(
             row![
-                text("From ~/.ssh/config")
+                text("From SSH config")
                     .size(13)
                     .color(palette.text_secondary),
                 container("").width(Length::Fill),
