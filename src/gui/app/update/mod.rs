@@ -219,6 +219,11 @@ impl App {
             Message::SshPasswordPromptCancel => {
                 self.password_prompt = None;
             }
+            Message::CreateSshTabFromConfig(index) => {
+                if let Some(profile) = self.ssh_config_profiles.get(index).cloned() {
+                    return self.request_ssh_tab(profile);
+                }
+            }
             Message::SftpNavigate { tab_id, path } => {
                 if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id)
                     && let Some(tx) = tab.sftp.command_tx.clone()

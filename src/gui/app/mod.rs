@@ -90,6 +90,7 @@ pub enum Message {
     SshPasswordPromptToggleSave(bool),
     SshPasswordPromptSubmit,
     SshPasswordPromptCancel,
+    CreateSshTabFromConfig(usize),
     ShowTabContextMenu(usize),
     CloseTabContextMenu,
     CursorMoved(iced::Point),
