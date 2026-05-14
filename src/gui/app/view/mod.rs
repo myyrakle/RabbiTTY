@@ -224,6 +224,7 @@ impl App {
         ImeEnabled::new(with_drawer)
             .preedit(self.ime_preedit.clone())
             .cursor_cell(Some(cursor_cell))
+            .text_size(self.config.terminal.font_size)
             .into()
     }
 

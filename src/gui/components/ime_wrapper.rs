@@ -25,6 +25,7 @@ pub struct ImeEnabled<'a, Message, Theme, Renderer> {
     content: Element<'a, Message, Theme, Renderer>,
     preedit: Option<(String, Option<Range<usize>>)>,
     cursor_cell: Option<CursorCell>,
+    text_size: f32,
 }
 
 impl<'a, Message, Theme, Renderer> ImeEnabled<'a, Message, Theme, Renderer> {
@@ -33,6 +34,7 @@ impl<'a, Message, Theme, Renderer> ImeEnabled<'a, Message, Theme, Renderer> {
             content: content.into(),
             preedit: None,
             cursor_cell: None,
+            text_size: 14.0,
         }
     }
 
@@ -43,6 +45,11 @@ impl<'a, Message, Theme, Renderer> ImeEnabled<'a, Message, Theme, Renderer> {
 
     pub fn cursor_cell(mut self, cell: Option<CursorCell>) -> Self {
         self.cursor_cell = cell;
+        self
+    }
+
+    pub fn text_size(mut self, size: f32) -> Self {
+        self.text_size = size;
         self
     }
 }
@@ -110,10 +117,11 @@ where
             Event::Window(iced::window::Event::RedrawRequested(_))
         ) {
             let bounds = layout.bounds();
+            let text_size = self.text_size;
             let preedit = self.preedit.as_ref().map(|(text, selection)| Preedit {
                 content: text.as_str(),
                 selection: selection.clone(),
-                text_size: Some(Pixels(14.0)),
+                text_size: Some(Pixels(text_size)),
             });
             let cursor_rect = self
                 .cursor_cell
