@@ -95,6 +95,7 @@ impl Session {
         let options = Options {
             shell: Some(Shell::new(spec.program, spec.args)),
             env: spec.env.into_iter().collect(),
+            working_directory: dirs::home_dir(),
             ..Default::default()
         };
 
@@ -173,6 +174,7 @@ impl Session {
         let options = Options {
             shell: Some(Shell::new(spec.program, spec.args)),
             env: spec.env.into_iter().collect(),
+            working_directory: dirs::home_dir(),
             ..Default::default()
         };
 
