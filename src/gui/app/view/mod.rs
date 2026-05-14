@@ -1,4 +1,3 @@
-#[cfg(target_os = "macos")]
 mod dialog;
 mod password_prompt;
 mod settings;
