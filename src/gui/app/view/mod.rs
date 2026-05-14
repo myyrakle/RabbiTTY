@@ -209,8 +209,22 @@ impl App {
             terminal_view
         };
 
+        let (cursor_col, cursor_row) = active_tab.cursor_position();
+        let cursor_cell = crate::gui::components::ime_wrapper::CursorCell {
+            col: cursor_col,
+            row: cursor_row,
+            grid_cols: dims.columns,
+            grid_rows: dims.lines,
+            padding: [
+                self.config.terminal.padding_x,
+                self.config.terminal.padding_y,
+            ],
+        };
+
         ImeEnabled::new(with_drawer)
             .preedit(self.ime_preedit.clone())
+            .cursor_cell(Some(cursor_cell))
+            .text_size(self.config.terminal.font_size)
             .into()
     }
 

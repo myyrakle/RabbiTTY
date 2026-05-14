@@ -10,10 +10,22 @@ use iced::{Element, Event, Length, Pixels, Rectangle, Size, Vector};
 
 use std::ops::Range;
 
+/// Grid cell that the IME composition window should anchor under.
+#[derive(Debug, Clone, Copy)]
+pub struct CursorCell {
+    pub col: usize,
+    pub row: usize,
+    pub grid_cols: usize,
+    pub grid_rows: usize,
+    pub padding: [f32; 2],
+}
+
 /// A wrapper widget that enables IME input for its child.
 pub struct ImeEnabled<'a, Message, Theme, Renderer> {
     content: Element<'a, Message, Theme, Renderer>,
     preedit: Option<(String, Option<Range<usize>>)>,
+    cursor_cell: Option<CursorCell>,
+    text_size: f32,
 }
 
 impl<'a, Message, Theme, Renderer> ImeEnabled<'a, Message, Theme, Renderer> {
@@ -21,11 +33,23 @@ impl<'a, Message, Theme, Renderer> ImeEnabled<'a, Message, Theme, Renderer> {
         Self {
             content: content.into(),
             preedit: None,
+            cursor_cell: None,
+            text_size: 14.0,
         }
     }
 
     pub fn preedit(mut self, preedit: Option<(String, Option<Range<usize>>)>) -> Self {
         self.preedit = preedit;
+        self
+    }
+
+    pub fn cursor_cell(mut self, cell: Option<CursorCell>) -> Self {
+        self.cursor_cell = cell;
+        self
+    }
+
+    pub fn text_size(mut self, size: f32) -> Self {
+        self.text_size = size;
         self
     }
 }
@@ -93,16 +117,23 @@ where
             Event::Window(iced::window::Event::RedrawRequested(_))
         ) {
             let bounds = layout.bounds();
+            let text_size = self.text_size;
             let preedit = self.preedit.as_ref().map(|(text, selection)| Preedit {
                 content: text.as_str(),
                 selection: selection.clone(),
-                text_size: Some(Pixels(14.0)),
+                text_size: Some(Pixels(text_size)),
             });
+            let cursor_rect = self
+                .cursor_cell
+                .map(|cell| cursor_pixel_rect(cell, bounds))
+                .unwrap_or_else(|| {
+                    Rectangle::new(
+                        iced::Point::new(bounds.x, bounds.y + bounds.height),
+                        Size::ZERO,
+                    )
+                });
             shell.request_input_method(&InputMethod::Enabled {
-                cursor: Rectangle::new(
-                    iced::Point::new(bounds.x, bounds.y + bounds.height),
-                    Size::ZERO,
-                ),
+                cursor: cursor_rect,
                 purpose: Purpose::Terminal,
                 preedit,
             });
@@ -153,6 +184,16 @@ where
             .as_widget_mut()
             .overlay(tree, layout, renderer, viewport, translation)
     }
+}
+
+fn cursor_pixel_rect(cell: CursorCell, bounds: Rectangle) -> Rectangle {
+    let inner_w = (bounds.width - cell.padding[0] * 2.0).max(1.0);
+    let inner_h = (bounds.height - cell.padding[1] * 2.0).max(1.0);
+    let cell_w = inner_w / cell.grid_cols.max(1) as f32;
+    let cell_h = inner_h / cell.grid_rows.max(1) as f32;
+    let x = bounds.x + cell.padding[0] + cell.col as f32 * cell_w;
+    let y = bounds.y + cell.padding[1] + (cell.row + 1) as f32 * cell_h;
+    Rectangle::new(iced::Point::new(x, y), Size::new(cell_w, 0.0))
 }
 
 impl<'a, Message, Theme, Renderer> From<ImeEnabled<'a, Message, Theme, Renderer>>
