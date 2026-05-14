@@ -141,6 +141,12 @@ impl TerminalEngine {
         self.term.mode().contains(TermMode::ALT_SCREEN)
     }
 
+    /// Current text cursor as `(col, row)` in viewport coordinates.
+    pub fn cursor_position(&self) -> (usize, usize) {
+        let point = self.term.grid().cursor.point;
+        (point.column.0, point.line.0.max(0) as usize)
+    }
+
     fn build_cells_into(&self, cells: &mut Vec<CellVisual>) {
         let RenderableContent {
             display_iter,

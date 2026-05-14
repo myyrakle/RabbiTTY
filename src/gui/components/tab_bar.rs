@@ -47,9 +47,7 @@ pub fn tab_bar<'a>(
             .on_press(Message::TabSelected(index))
             .on_enter(Message::TabDragHover(index));
         if is_terminal_tab {
-            tab_item = tab_item
-                .on_right_press(Message::ShowTabContextMenu(index))
-                .on_move(Message::CursorMoved);
+            tab_item = tab_item.on_right_press(Message::ShowTabContextMenu(index));
         }
         tab_elements.push(tab_item.into());
     }

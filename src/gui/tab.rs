@@ -114,6 +114,10 @@ impl TerminalTab {
         self.engine.scroll_position()
     }
 
+    pub fn cursor_position(&self) -> (usize, usize) {
+        self.engine.cursor_position()
+    }
+
     pub fn selected_text(&self) -> Option<String> {
         let sel = self.selection.as_ref().filter(|s| !s.is_empty())?;
         let cells = self.engine.render_cells();
