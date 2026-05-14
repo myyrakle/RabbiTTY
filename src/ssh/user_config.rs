@@ -43,12 +43,17 @@ pub fn load() -> Vec<SshProfile> {
                 .as_ref()
                 .and_then(|files| files.first())
                 .map(|p| p.to_string_lossy().to_string());
+            let auth_method = if identity_file.is_some() {
+                SshAuthMethod::KeyFile
+            } else {
+                SshAuthMethod::Password
+            };
             profiles.push(SshProfile {
                 name: raw.to_string(),
                 host: params.host_name.clone().unwrap_or_else(|| raw.to_string()),
                 port: params.port.unwrap_or(22),
                 user: params.user.clone().unwrap_or_default(),
-                auth_method: SshAuthMethod::KeyFile,
+                auth_method,
                 identity_file,
                 password: None,
                 proxy_command: None,
