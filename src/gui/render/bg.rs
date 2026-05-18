@@ -1,3 +1,4 @@
+use crate::config::CursorShape;
 use crate::terminal::{CellVisual, Selection};
 use bytemuck::{Pod, Zeroable};
 use iced::wgpu::{self, util::DeviceExt};
@@ -14,6 +15,8 @@ struct Uniforms {
 #[repr(C)]
 struct InstanceRaw {
     pos: [u32; 2],
+    rect_offset: [f32; 2],
+    rect_size: [f32; 2],
     color: [f32; 4],
 }
 
@@ -111,7 +114,9 @@ impl BackgroundPipeline {
                         step_mode: wgpu::VertexStepMode::Instance,
                         attributes: &wgpu::vertex_attr_array![
                             1 => Uint32x2,
-                            2 => Float32x4
+                            2 => Float32x2,
+                            3 => Float32x2,
+                            4 => Float32x4
                         ],
                     },
                 ],
@@ -167,6 +172,7 @@ impl BackgroundPipeline {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare_instances(
         &mut self,
         device: &wgpu::Device,
@@ -174,6 +180,9 @@ impl BackgroundPipeline {
         cells: &[CellVisual],
         selection: Option<&Selection>,
         display_offset: usize,
+        cursor: Option<[u32; 2]>,
+        cursor_shape: CursorShape,
+        cursor_color: [f32; 4],
     ) {
         self.instances.clear();
         let needed = cells.len().saturating_sub(self.instances.capacity());
@@ -189,9 +198,26 @@ impl BackgroundPipeline {
             };
             InstanceRaw {
                 pos: [cell.col as u32, cell.row as u32],
+                rect_offset: [0.0, 0.0],
+                rect_size: [1.0, 1.0],
                 color: bg,
             }
         }));
+
+        if let Some(pos) = cursor {
+            let (rect_offset, rect_size) = match cursor_shape {
+                CursorShape::Block => ([0.0, 0.0], [1.0, 1.0]),
+                CursorShape::Bar => ([0.0, 0.0], [0.15, 1.0]),
+                CursorShape::Underline => ([0.0, 0.85], [1.0, 0.15]),
+            };
+            self.instances.push(InstanceRaw {
+                pos,
+                rect_offset,
+                rect_size,
+                color: cursor_color,
+            });
+        }
+
         let required = self.instances.len().max(1);
 
         if required > self.instance_capacity {
@@ -217,10 +243,18 @@ impl BackgroundPipeline {
                 0,
                 bytemuck::cast_slice(&[InstanceRaw {
                     pos: [0, 0],
+                    rect_offset: [0.0, 0.0],
+                    rect_size: [1.0, 1.0],
                     color: [0.0, 0.0, 0.0, 0.0],
                 }]),
             );
         }
+    }
+
+    /// Number of background instances queued by the last `prepare_instances`
+    /// call (cells plus an optional cursor instance).
+    pub(super) fn instance_count(&self) -> usize {
+        self.instances.len()
     }
 
     pub(super) fn pipeline(&self) -> &wgpu::RenderPipeline {

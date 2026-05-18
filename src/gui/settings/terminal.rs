@@ -1,10 +1,10 @@
-use crate::config::AppConfig;
+use crate::config::{AppConfig, CursorShape};
 use crate::gui::app::Message;
 use crate::gui::settings::{
     SettingsDraft, SettingsField, TerminalFontOption, hint_text, input_row_with_suffix, section,
 };
 use crate::gui::theme::{Palette, SPACING_NORMAL};
-use iced::widget::{checkbox, column, combo_box, row, text, toggler};
+use iced::widget::{checkbox, column, combo_box, pick_list, row, text, toggler};
 use iced::{Alignment, Element, Length};
 
 pub fn view<'a>(
@@ -142,10 +142,44 @@ pub fn view<'a>(
         palette,
     );
 
+    let cursor_section = section(
+        "Cursor",
+        column(vec![
+            row![
+                text("Shape").size(13).width(label_width),
+                pick_list(
+                    CursorShape::ALL,
+                    Some(draft.cursor_shape),
+                    Message::SettingsCursorShapeSelected,
+                )
+                .text_size(13),
+            ]
+            .align_y(Alignment::Center)
+            .spacing(SPACING_NORMAL)
+            .width(Length::Fill)
+            .into(),
+            row![
+                text("Blink").size(13).width(label_width),
+                toggler(draft.cursor_blink)
+                    .on_toggle(Message::SettingsCursorBlinkToggled)
+                    .size(18),
+            ]
+            .align_y(Alignment::Center)
+            .spacing(SPACING_NORMAL)
+            .width(Length::Fill)
+            .into(),
+        ])
+        .spacing(SPACING_NORMAL)
+        .width(Length::Fill)
+        .into(),
+        palette,
+    );
+
     column(vec![
         font_section,
         padding_section,
         scrollback_section,
+        cursor_section,
         paste_section,
     ])
     .spacing(SPACING_NORMAL)

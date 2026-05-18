@@ -37,6 +37,8 @@ pub enum Message {
     SettingsBlurToggled(bool),
     SettingsBracketedPasteToggled(bool),
     SettingsMultilinePasteConfirmToggled(bool),
+    SettingsCursorShapeSelected(crate::config::CursorShape),
+    SettingsCursorBlinkToggled(bool),
     AddSshProfile,
     EditSshProfile(usize),
     RequestRemoveSshProfile(usize),
@@ -137,6 +139,7 @@ pub enum Message {
     ResizeDebounce,
     SettingsCommitDebounce,
     AnimationTick,
+    CursorBlink,
     ApplyWindowStyle,
 
     FontSelected(TerminalFontOption),
@@ -202,6 +205,8 @@ pub struct App {
     pub(super) password_prompt: Option<PasswordPromptState>,
     /// Text waiting for multiline-paste confirmation.
     pub(super) pending_paste: Option<String>,
+    /// Current on/off phase of the blinking cursor.
+    pub(super) cursor_blink_on: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -286,6 +291,7 @@ impl App {
             ssh_config_profiles: crate::ssh::user_config::load(),
             password_prompt: None,
             pending_paste: None,
+            cursor_blink_on: true,
         }
     }
 

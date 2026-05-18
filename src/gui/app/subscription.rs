@@ -19,8 +19,18 @@ impl App {
             Subscription::none()
         };
 
+        let cursor_blink = if self.config.terminal.cursor_blink
+            && self.active_tab != super::SETTINGS_TAB_INDEX
+            && self.tabs.get(self.active_tab).is_some()
+        {
+            time::every(std::time::Duration::from_millis(530)).map(|_| Message::CursorBlink)
+        } else {
+            Subscription::none()
+        };
+
         Subscription::batch([
             animation_tick,
+            cursor_blink,
             Subscription::run(|| {
                 stream::channel(100, async |mut output| {
                     let (sender, mut receiver) = mpsc::unbounded();

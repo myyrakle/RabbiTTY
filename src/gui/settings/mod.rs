@@ -1,4 +1,6 @@
-use crate::config::{AppConfig, AppConfigUpdates, SshAuthMethod, SshProfile, parse_hex_color};
+use crate::config::{
+    AppConfig, AppConfigUpdates, CursorShape, SshAuthMethod, SshProfile, parse_hex_color,
+};
 use crate::gui::app::Message;
 use crate::gui::theme::{Palette, RADIUS_NORMAL, RADIUS_SMALL, SPACING_NORMAL};
 use iced::widget::{column, container, row, rule, text, text_input, toggler};
@@ -217,6 +219,8 @@ pub struct SettingsDraft {
     pub terminal_scroll_speed: String,
     pub bracketed_paste: bool,
     pub multiline_paste_confirm: bool,
+    pub cursor_shape: CursorShape,
+    pub cursor_blink: bool,
     pub color_scheme: String,
     pub foreground: String,
     pub background: String,
@@ -254,6 +258,8 @@ impl SettingsDraft {
             terminal_scroll_speed: format!("{:.1}", config.terminal.scroll_multiplier),
             bracketed_paste: config.terminal.bracketed_paste,
             multiline_paste_confirm: config.terminal.multiline_paste_confirm,
+            cursor_shape: config.terminal.cursor_shape,
+            cursor_blink: config.terminal.cursor_blink,
             color_scheme: config.theme.color_scheme.clone(),
             foreground: format_rgb(config.theme.foreground),
             background: format_rgb(config.theme.background),
@@ -466,6 +472,8 @@ impl SettingsDraft {
             terminal_scroll_multiplier: parse_f32(&self.terminal_scroll_speed),
             terminal_bracketed_paste: Some(self.bracketed_paste),
             terminal_multiline_paste_confirm: Some(self.multiline_paste_confirm),
+            terminal_cursor_shape: Some(self.cursor_shape),
+            terminal_cursor_blink: Some(self.cursor_blink),
             color_scheme: Some(self.color_scheme.clone()),
             foreground: parse_hex_color(&self.foreground),
             background: parse_hex_color(&self.background),

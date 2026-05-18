@@ -391,6 +391,11 @@ impl TerminalTheme {
         }
     }
 
+    /// The configured cursor color.
+    pub(super) fn cursor_rgb(&self) -> Rgb {
+        self.cursor
+    }
+
     pub(super) fn named_color(&self, named: NamedColor) -> Rgb {
         match named {
             NamedColor::Foreground | NamedColor::BrightForeground => self.foreground,

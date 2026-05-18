@@ -153,6 +153,10 @@ impl App {
         // identical to other panes (e.g. Settings) and avoids double blending.
         let clear_color = [0.0, 0.0, 0.0, 0.0];
         let (display_offset, scroll_history) = active_tab.scroll_position();
+        let cursor = active_tab
+            .cursor_cell()
+            .map(|(col, row)| [col as u32, row as u32]);
+        let cursor_visible = !self.config.terminal.cursor_blink || self.cursor_blink_on;
         let terminal_widget = TerminalProgram {
             cells,
             grid_size,
@@ -166,6 +170,10 @@ impl App {
             selection: active_tab.selection,
             mouse_mode: active_tab.mouse_mode(),
             display_offset,
+            cursor,
+            cursor_shape: self.config.terminal.cursor_shape,
+            cursor_visible,
+            cursor_color: active_tab.cursor_color(),
         }
         .widget()
         .width(Length::Fill)

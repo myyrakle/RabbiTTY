@@ -456,6 +456,14 @@ impl App {
                 self.settings_draft.multiline_paste_confirm = enabled;
                 return self.apply_settings(true);
             }
+            Message::SettingsCursorShapeSelected(shape) => {
+                self.settings_draft.cursor_shape = shape;
+                return self.apply_settings(true);
+            }
+            Message::SettingsCursorBlinkToggled(enabled) => {
+                self.settings_draft.cursor_blink = enabled;
+                return self.apply_settings(true);
+            }
             Message::FontSelected(option) => {
                 self.settings_draft
                     .update(SettingsField::TerminalFontSelection, option.value);
@@ -650,6 +658,9 @@ impl App {
                         tab.sftp.open = false;
                     }
                 }
+            }
+            Message::CursorBlink => {
+                self.cursor_blink_on = !self.cursor_blink_on;
             }
             Message::ResizeDebounce => {
                 if self.resize_debounce_seq != self.resize_debounce_spawned_seq {

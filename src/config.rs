@@ -70,6 +70,7 @@ pub const DEFAULT_TERMINAL_SCROLLBACK: usize = 10_000;
 pub const DEFAULT_BRACKETED_PASTE: bool = true;
 pub const DEFAULT_MULTILINE_PASTE_CONFIRM: bool = false;
 pub const DEFAULT_TERMINAL_SCROLL_MULTIPLIER: f32 = 1.0;
+pub const DEFAULT_CURSOR_BLINK: bool = true;
 const DEJAVU_SANS_MONO: &[u8] = include_bytes!("../fonts/DejaVuSansMono.ttf");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
@@ -78,6 +79,31 @@ pub enum SshAuthMethod {
     KeyFile,
     #[default]
     Password,
+}
+
+/// Visual shape of the terminal text cursor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CursorShape {
+    #[default]
+    Block,
+    Bar,
+    Underline,
+}
+
+impl CursorShape {
+    pub const ALL: [Self; 3] = [Self::Block, Self::Bar, Self::Underline];
+}
+
+impl std::fmt::Display for CursorShape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let label = match self {
+            Self::Block => "Block",
+            Self::Bar => "Bar",
+            Self::Underline => "Underline",
+        };
+        f.write_str(label)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -136,6 +162,8 @@ pub struct TerminalConfig {
     pub bracketed_paste: bool,
     pub multiline_paste_confirm: bool,
     pub scroll_multiplier: f32,
+    pub cursor_shape: CursorShape,
+    pub cursor_blink: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -205,6 +233,8 @@ struct TerminalFileConfig {
     bracketed_paste: Option<bool>,
     multiline_paste_confirm: Option<bool>,
     scroll_multiplier: Option<f32>,
+    cursor_shape: Option<CursorShape>,
+    cursor_blink: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -265,6 +295,8 @@ pub struct AppConfigUpdates {
     pub terminal_bracketed_paste: Option<bool>,
     pub terminal_multiline_paste_confirm: Option<bool>,
     pub terminal_scroll_multiplier: Option<f32>,
+    pub terminal_cursor_shape: Option<CursorShape>,
+    pub terminal_cursor_blink: Option<bool>,
 }
 
 impl Default for AppConfig {
@@ -287,6 +319,8 @@ impl Default for AppConfig {
                 bracketed_paste: DEFAULT_BRACKETED_PASTE,
                 multiline_paste_confirm: DEFAULT_MULTILINE_PASTE_CONFIRM,
                 scroll_multiplier: DEFAULT_TERMINAL_SCROLL_MULTIPLIER,
+                cursor_shape: CursorShape::default(),
+                cursor_blink: DEFAULT_CURSOR_BLINK,
             },
             theme: ThemeConfig {
                 color_scheme: "Catppuccin Mocha".to_string(),
@@ -374,6 +408,12 @@ impl AppConfig {
         if let Some(mult) = updates.terminal_scroll_multiplier {
             self.terminal.scroll_multiplier =
                 sanitize_scroll_multiplier(mult, self.terminal.scroll_multiplier);
+        }
+        if let Some(shape) = updates.terminal_cursor_shape {
+            self.terminal.cursor_shape = shape;
+        }
+        if let Some(enabled) = updates.terminal_cursor_blink {
+            self.terminal.cursor_blink = enabled;
         }
         if let Some(scheme) = updates.color_scheme {
             self.theme.color_scheme = scheme;
@@ -501,6 +541,12 @@ impl AppConfig {
             if let Some(mult) = term.scroll_multiplier {
                 self.terminal.scroll_multiplier =
                     sanitize_scroll_multiplier(mult, self.terminal.scroll_multiplier);
+            }
+            if let Some(shape) = term.cursor_shape {
+                self.terminal.cursor_shape = shape;
+            }
+            if let Some(enabled) = term.cursor_blink {
+                self.terminal.cursor_blink = enabled;
             }
         }
 
@@ -846,6 +892,8 @@ impl From<&AppConfig> for FileConfig {
                 bracketed_paste: Some(config.terminal.bracketed_paste),
                 multiline_paste_confirm: Some(config.terminal.multiline_paste_confirm),
                 scroll_multiplier: Some(config.terminal.scroll_multiplier),
+                cursor_shape: Some(config.terminal.cursor_shape),
+                cursor_blink: Some(config.terminal.cursor_blink),
             }),
             theme: Some(ThemeFileConfig {
                 color_scheme: if config.theme.color_scheme.is_empty() {
