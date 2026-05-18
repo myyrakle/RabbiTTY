@@ -360,7 +360,7 @@ impl SettingsDraft {
 
     pub fn begin_ssh_connection_test(&mut self) -> Result<SshProfile, String> {
         let Some(profile) = self.ssh_profile_modal_draft.to_profile() else {
-            let message = "Host is required before testing.".to_string();
+            let message = crate::t!("settings.ssh.status.host_required").to_string();
             self.ssh_connection_test_status = SshConnectionTestStatus::Failure(message.clone());
             return Err(message);
         };
@@ -371,7 +371,9 @@ impl SettingsDraft {
 
     pub fn finish_ssh_connection_test(&mut self, result: Result<(), String>) {
         self.ssh_connection_test_status = match result {
-            Ok(()) => SshConnectionTestStatus::Success("Connection successful.".to_string()),
+            Ok(()) => SshConnectionTestStatus::Success(
+                crate::t!("settings.ssh.status.connection_successful").to_string(),
+            ),
             Err(message) => SshConnectionTestStatus::Failure(message),
         };
     }
@@ -381,7 +383,7 @@ impl SettingsDraft {
             return Ok(None);
         }
         let Some(profile) = self.ssh_profile_modal_draft.to_profile() else {
-            let message = "SSH profile needs a Host before saving.".to_string();
+            let message = crate::t!("settings.ssh.status.host_required_save").to_string();
             self.ssh_profiles_error = Some(message.clone());
             return Err(message);
         };
@@ -426,7 +428,7 @@ impl SettingsDraft {
     }
 
     pub fn set_ssh_profiles_saved(&mut self) {
-        self.ssh_profiles_error = Some("SSH profiles saved.".to_string());
+        self.ssh_profiles_error = Some(crate::t!("settings.ssh.status.profiles_saved").to_string());
     }
 
     pub fn update(&mut self, field: SettingsField, value: String) {
@@ -1070,7 +1072,7 @@ mod tests {
         draft.update_ssh_profile_modal(SshProfileField::Name, "missing-host".into());
         let err = draft.save_ssh_profile_modal().unwrap_err();
 
-        assert_eq!(err, "SSH profile needs a Host before saving.");
+        assert_eq!(err, crate::t!("settings.ssh.status.host_required_save"));
         assert!(draft.ssh_profiles.is_empty());
         assert!(draft.ssh_profile_modal_mode.is_some());
     }
@@ -1155,7 +1157,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             draft.ssh_connection_test_status,
-            SshConnectionTestStatus::Failure("Host is required before testing.".into())
+            SshConnectionTestStatus::Failure(crate::t!("settings.ssh.status.host_required").into())
         );
     }
 
@@ -1182,7 +1184,9 @@ mod tests {
         draft.finish_ssh_connection_test(Ok(()));
         assert_eq!(
             draft.ssh_connection_test_status,
-            SshConnectionTestStatus::Success("Connection successful.".into())
+            SshConnectionTestStatus::Success(
+                crate::t!("settings.ssh.status.connection_successful").into()
+            )
         );
     }
 

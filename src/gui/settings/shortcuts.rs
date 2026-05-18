@@ -11,40 +11,40 @@ pub fn view<'a>(
     palette: Palette,
 ) -> Element<'a, Message> {
     let app_section = section(
-        "Application",
+        crate::t!("settings.shortcuts.application"),
         column(vec![
             input_row(
-                "New tab",
+                crate::t!("settings.shortcuts.new_tab"),
                 &draft.shortcut_new_tab,
                 SettingsField::ShortcutNewTab,
                 palette,
             ),
             input_row(
-                "Close tab",
+                crate::t!("settings.shortcuts.close_tab"),
                 &draft.shortcut_close_tab,
                 SettingsField::ShortcutCloseTab,
                 palette,
             ),
             input_row(
-                "Open settings",
+                crate::t!("settings.shortcuts.open_settings"),
                 &draft.shortcut_open_settings,
                 SettingsField::ShortcutOpenSettings,
                 palette,
             ),
             input_row(
-                "Next tab",
+                crate::t!("settings.shortcuts.next_tab"),
                 &draft.shortcut_next_tab,
                 SettingsField::ShortcutNextTab,
                 palette,
             ),
             input_row(
-                "Previous tab",
+                crate::t!("settings.shortcuts.prev_tab"),
                 &draft.shortcut_prev_tab,
                 SettingsField::ShortcutPrevTab,
                 palette,
             ),
             input_row(
-                "Quit",
+                crate::t!("settings.shortcuts.quit"),
                 &draft.shortcut_quit,
                 SettingsField::ShortcutQuit,
                 palette,
