@@ -19,7 +19,7 @@ pub fn view<'a>(
     let grid_rows = build_preset_grid(draft, &palette);
 
     let presets_section = section(
-        "Color Scheme",
+        crate::t!("settings.theme.color_scheme_section"),
         Column::with_children(grid_rows)
             .spacing(SPACING_NORMAL)
             .width(Length::Fill)
@@ -30,30 +30,30 @@ pub fn view<'a>(
     // -- Color palette pickers for fg/bg/cursor --
     let current_preset = crate::terminal::theme::find_preset(&draft.color_scheme);
     let colors_section = section(
-        "Colors",
+        crate::t!("settings.theme.colors_section"),
         column(vec![
             color_palette_row(
-                "Foreground",
+                crate::t!("settings.theme.foreground"),
                 &draft.foreground,
                 SettingsField::ThemeForeground,
                 current_preset,
                 &palette,
             ),
             color_palette_row(
-                "Background",
+                crate::t!("settings.theme.background"),
                 &draft.background,
                 SettingsField::ThemeBackground,
                 current_preset,
                 &palette,
             ),
             color_palette_row(
-                "Cursor",
+                crate::t!("settings.theme.cursor"),
                 &draft.cursor,
                 SettingsField::ThemeCursor,
                 current_preset,
                 &palette,
             ),
-            hint_text("Click a swatch or type hex (#rrggbb)", palette),
+            hint_text(crate::t!("settings.theme.colors_hint"), palette),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
@@ -62,9 +62,9 @@ pub fn view<'a>(
     );
 
     let opacity_section = section(
-        "Opacity",
+        crate::t!("settings.theme.opacity_section"),
         column(vec![input_row_with_suffix(
-            "Background opacity",
+            crate::t!("settings.theme.background_opacity"),
             &draft.background_opacity,
             SettingsField::ThemeBackgroundOpacity,
             "0.0 ~ 1.0",
@@ -77,29 +77,29 @@ pub fn view<'a>(
     );
 
     let blur_section = section(
-        "Blur",
-        column(vec![toggle_row("Enable blur", draft.blur_enabled)])
-            .spacing(SPACING_NORMAL)
-            .width(Length::Fill)
-            .into(),
+        crate::t!("settings.theme.blur_section"),
+        column(vec![toggle_row(
+            crate::t!("settings.theme.enable_blur"),
+            draft.blur_enabled,
+        )])
+        .spacing(SPACING_NORMAL)
+        .width(Length::Fill)
+        .into(),
         palette,
     );
 
     #[cfg(target_os = "macos")]
     let macos_blur_section = section(
-        "macOS Blur",
+        crate::t!("settings.theme.macos_blur_section"),
         column(vec![
             input_row_with_suffix(
-                "Blur Radius",
+                crate::t!("settings.theme.blur_radius"),
                 &draft.macos_blur_radius,
                 SettingsField::ThemeMacosBlurRadius,
                 "0 ~ 100",
                 palette,
             ),
-            hint_text(
-                "Controls the intensity of the window background blur effect.",
-                palette,
-            ),
+            hint_text(crate::t!("settings.theme.blur_radius_hint"), palette),
         ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)

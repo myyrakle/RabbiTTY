@@ -16,20 +16,22 @@ pub fn view<'a>(
     palette: Palette,
 ) -> Element<'a, Message> {
     let font_section = section(
-        "Font",
+        crate::t!("settings.terminal.font_section"),
         column(vec![
             input_row_with_suffix(
-                "Size",
+                crate::t!("settings.terminal.size"),
                 &draft.terminal_font_size,
                 SettingsField::TerminalFontSize,
                 "pt",
                 palette,
             ),
             row![
-                text("Font family").size(13).width(Length::Fixed(160.0)),
+                text(crate::t!("settings.terminal.font_family"))
+                    .size(13)
+                    .width(Length::Fixed(160.0)),
                 combo_box(
                     font_combo_state,
-                    "Search fonts...",
+                    crate::t!("settings.terminal.font_search_placeholder"),
                     selected_font,
                     Message::FontSelected,
                 )
@@ -41,7 +43,7 @@ pub fn view<'a>(
             .into(),
             row![
                 checkbox(show_all_fonts)
-                    .label("Show all fonts")
+                    .label(crate::t!("settings.terminal.show_all_fonts"))
                     .on_toggle(Message::ToggleShowAllFonts)
                     .size(14)
                     .text_size(13),
@@ -49,9 +51,9 @@ pub fn view<'a>(
             .into(),
             hint_text(
                 if draft.terminal_font_selection.is_empty() {
-                    "Using bundled DejaVu Sans Mono."
+                    crate::t!("settings.terminal.font_hint_bundled")
                 } else {
-                    "Monospaced fonts are recommended for terminal text."
+                    crate::t!("settings.terminal.font_hint_monospace")
                 },
                 palette,
             ),
@@ -63,17 +65,17 @@ pub fn view<'a>(
     );
 
     let padding_section = section(
-        "Padding",
+        crate::t!("settings.terminal.padding_section"),
         column(vec![
             input_row_with_suffix(
-                "Horizontal",
+                crate::t!("settings.terminal.horizontal"),
                 &draft.terminal_padding_x,
                 SettingsField::TerminalPaddingX,
                 "px",
                 palette,
             ),
             input_row_with_suffix(
-                "Vertical",
+                crate::t!("settings.terminal.vertical"),
                 &draft.terminal_padding_y,
                 SettingsField::TerminalPaddingY,
                 "px",
@@ -87,17 +89,17 @@ pub fn view<'a>(
     );
 
     let scrollback_section = section(
-        "Scrolling",
+        crate::t!("settings.terminal.scrolling_section"),
         column(vec![
             input_row_with_suffix(
-                "Scrollback",
+                crate::t!("settings.terminal.scrollback"),
                 &draft.terminal_scrollback,
                 SettingsField::TerminalScrollback,
-                "lines",
+                crate::t!("settings.terminal.scrollback_suffix"),
                 palette,
             ),
             input_row_with_suffix(
-                "Scroll speed",
+                crate::t!("settings.terminal.scroll_speed"),
                 &draft.terminal_scroll_speed,
                 SettingsField::TerminalScrollSpeed,
                 "x",
@@ -113,10 +115,12 @@ pub fn view<'a>(
     let label_width = Length::Fixed(160.0);
 
     let paste_section = section(
-        "Paste",
+        crate::t!("settings.terminal.paste_section"),
         column(vec![
             row![
-                text("Bracketed paste").size(13).width(label_width),
+                text(crate::t!("settings.terminal.bracketed_paste"))
+                    .size(13)
+                    .width(label_width),
                 toggler(draft.bracketed_paste)
                     .on_toggle(Message::SettingsBracketedPasteToggled)
                     .size(18),
@@ -126,7 +130,9 @@ pub fn view<'a>(
             .width(Length::Fill)
             .into(),
             row![
-                text("Confirm multi-line paste").size(13).width(label_width),
+                text(crate::t!("settings.terminal.confirm_multiline_paste"))
+                    .size(13)
+                    .width(label_width),
                 toggler(draft.multiline_paste_confirm)
                     .on_toggle(Message::SettingsMultilinePasteConfirmToggled)
                     .size(18),
@@ -143,10 +149,12 @@ pub fn view<'a>(
     );
 
     let cursor_section = section(
-        "Cursor",
+        crate::t!("settings.terminal.cursor_section"),
         column(vec![
             row![
-                text("Shape").size(13).width(label_width),
+                text(crate::t!("settings.terminal.shape"))
+                    .size(13)
+                    .width(label_width),
                 pick_list(
                     CursorShape::ALL,
                     Some(draft.cursor_shape),
@@ -159,7 +167,9 @@ pub fn view<'a>(
             .width(Length::Fill)
             .into(),
             row![
-                text("Blink").size(13).width(label_width),
+                text(crate::t!("settings.terminal.blink"))
+                    .size(13)
+                    .width(label_width),
                 toggler(draft.cursor_blink)
                     .on_toggle(Message::SettingsCursorBlinkToggled)
                     .size(18),
@@ -176,10 +186,12 @@ pub fn view<'a>(
     );
 
     let bell_section = section(
-        "Bell",
+        crate::t!("settings.terminal.bell_section"),
         column(vec![
             row![
-                text("Behavior").size(13).width(label_width),
+                text(crate::t!("settings.terminal.behavior"))
+                    .size(13)
+                    .width(label_width),
                 pick_list(
                     BellMode::ALL,
                     Some(draft.bell_mode),

@@ -98,9 +98,9 @@ impl CursorShape {
 impl std::fmt::Display for CursorShape {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let label = match self {
-            Self::Block => "Block",
-            Self::Bar => "Bar",
-            Self::Underline => "Underline",
+            Self::Block => crate::t!("settings.terminal.cursor_shape.block"),
+            Self::Bar => crate::t!("settings.terminal.cursor_shape.bar"),
+            Self::Underline => crate::t!("settings.terminal.cursor_shape.underline"),
         };
         f.write_str(label)
     }
@@ -123,9 +123,9 @@ impl BellMode {
 impl std::fmt::Display for BellMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let label = match self {
-            Self::Off => "Off",
-            Self::Visual => "Visual flash",
-            Self::Sound => "Sound",
+            Self::Off => crate::t!("settings.terminal.bell_mode.off"),
+            Self::Visual => crate::t!("settings.terminal.bell_mode.visual"),
+            Self::Sound => crate::t!("settings.terminal.bell_mode.sound"),
         };
         f.write_str(label)
     }

@@ -54,12 +54,16 @@ fn delete_confirm_overlay<'a>(
 
     let modal = container(
         column![
-            text("Delete SSH Profile").size(16).color(palette.text),
+            text(crate::t!("settings.ssh.delete_profile"))
+                .size(16)
+                .color(palette.text),
             text(description).size(13).color(palette.text_secondary),
             row![
                 container("").width(Length::Fill),
-                button_secondary("Cancel", palette).on_press(Message::CancelRemoveSshProfile),
-                button_primary("Delete", palette).on_press(Message::ConfirmRemoveSshProfile),
+                button_secondary(crate::t!("settings.ssh.cancel"), palette)
+                    .on_press(Message::CancelRemoveSshProfile),
+                button_primary(crate::t!("settings.ssh.delete"), palette)
+                    .on_press(Message::ConfirmRemoveSshProfile),
             ]
             .spacing(SPACING_SMALL)
             .align_y(Alignment::Center)
@@ -103,7 +107,9 @@ fn content<'a>(
 
     items.push(
         row![
-            text("Profiles").size(16).color(palette.text),
+            text(crate::t!("settings.ssh.profiles"))
+                .size(16)
+                .color(palette.text),
             container("").width(Length::Fill),
             button_primary("+", palette).on_press(Message::AddSshProfile),
         ]
@@ -128,7 +134,7 @@ fn content<'a>(
     if !ssh_config_profiles.is_empty() {
         items.push(
             row![
-                text("From SSH config")
+                text(crate::t!("settings.ssh.from_ssh_config"))
                     .size(13)
                     .color(palette.text_secondary),
                 container("").width(Length::Fill),
@@ -218,11 +224,13 @@ fn empty_state(palette: Palette) -> Element<'static, Message> {
                 a: 0.3,
                 ..palette.text
             }),
-            text("No SSH profiles yet").size(13).color(Color {
-                a: 0.5,
-                ..palette.text
-            }),
-            text("Add a profile to quickly connect to remote servers")
+            text(crate::t!("settings.ssh.no_profiles"))
+                .size(13)
+                .color(Color {
+                    a: 0.5,
+                    ..palette.text
+                }),
+            text(crate::t!("settings.ssh.empty_hint"))
                 .size(11)
                 .color(palette.text_secondary),
         ]
@@ -290,7 +298,7 @@ fn profile_title(profile: &SshProfileDraft) -> String {
     } else if !profile.host.trim().is_empty() {
         profile.host.trim().to_string()
     } else {
-        "New Profile".to_string()
+        crate::t!("settings.ssh.new_profile").to_string()
     }
 }
 
@@ -310,8 +318,8 @@ fn profile_subtitle(profile: &SshProfileDraft) -> String {
         )
     };
     let auth = match profile.auth_method {
-        SshAuthMethod::KeyFile => "Key file",
-        SshAuthMethod::Password => "Password",
+        SshAuthMethod::KeyFile => crate::t!("settings.ssh.key_file"),
+        SshAuthMethod::Password => crate::t!("settings.ssh.password"),
     };
     let proxy = if profile.proxy_command.trim().is_empty() {
         ""
@@ -337,8 +345,8 @@ fn modal_overlay_content<'a>(
     let backdrop = mouse_area(backdrop(palette)).on_press(Message::CloseSshProfileModal);
 
     let title = match mode {
-        SshProfileModalMode::Create => "Create SSH Profile",
-        SshProfileModalMode::Edit(_) => "Edit SSH Profile",
+        SshProfileModalMode::Create => crate::t!("settings.ssh.create_profile"),
+        SshProfileModalMode::Edit(_) => crate::t!("settings.ssh.edit_profile"),
     };
 
     let mut modal_items: Vec<Element<Message>> = Vec::new();
@@ -352,7 +360,9 @@ fn modal_overlay_content<'a>(
         .width(Length::Fill)
         .into(),
     );
-    if let Some(error) = error.filter(|message| *message != "SSH profiles saved.") {
+    if let Some(error) =
+        error.filter(|message| *message != crate::t!("settings.ssh.status.profiles_saved"))
+    {
         modal_items.push(status_banner(error, palette));
     }
     modal_items.push(profile_form(profile, palette));
@@ -360,17 +370,20 @@ fn modal_overlay_content<'a>(
         modal_items.push(status);
     }
     let test_button = if matches!(test_status, SshConnectionTestStatus::Testing) {
-        button_secondary("Testing...", palette)
+        button_secondary(crate::t!("settings.ssh.testing"), palette)
     } else {
-        button_secondary("Test Connection", palette).on_press(Message::TestSshConnection)
+        button_secondary(crate::t!("settings.ssh.test_connection"), palette)
+            .on_press(Message::TestSshConnection)
     };
     modal_items.push(container("").height(Length::Fixed(8.0)).into());
     modal_items.push(
         row![
             test_button,
             container("").width(Length::Fill),
-            button_secondary("Cancel", palette).on_press(Message::CloseSshProfileModal),
-            button_primary("Save", palette).on_press(Message::SaveSshProfileModal),
+            button_secondary(crate::t!("settings.ssh.cancel"), palette)
+                .on_press(Message::CloseSshProfileModal),
+            button_primary(crate::t!("settings.ssh.save"), palette)
+                .on_press(Message::SaveSshProfileModal),
         ]
         .spacing(SPACING_SMALL)
         .align_y(Alignment::Center)
@@ -415,7 +428,10 @@ fn connection_test_status_banner<'a>(
 ) -> Option<Element<'a, Message>> {
     match status {
         SshConnectionTestStatus::Idle => None,
-        SshConnectionTestStatus::Testing => Some(status_banner("Testing connection...", palette)),
+        SshConnectionTestStatus::Testing => Some(status_banner(
+            crate::t!("settings.ssh.status.testing_connection"),
+            palette,
+        )),
         SshConnectionTestStatus::Success(message) => Some(status_banner(message, palette)),
         SshConnectionTestStatus::Failure(message) => Some(status_banner(message, palette)),
     }
@@ -438,14 +454,14 @@ fn backdrop(palette: Palette) -> container::Container<'static, Message> {
 
 fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'a, Message> {
     let key_button = auth_method_button(
-        "Key File",
+        crate::t!("settings.ssh.key_file_label"),
         matches!(profile.auth_method, SshAuthMethod::KeyFile),
         "key_file",
         palette,
     );
 
     let password_button = auth_method_button(
-        "Password",
+        crate::t!("settings.ssh.password"),
         matches!(profile.auth_method, SshAuthMethod::Password),
         "password",
         palette,
@@ -454,20 +470,25 @@ fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'
     let auth_input: Element<'a, Message> = if matches!(profile.auth_method, SshAuthMethod::KeyFile)
     {
         modal_input(
-            "Key File  (e.g. ~/.ssh/id_rsa)",
+            crate::t!("settings.ssh.key_file_input_placeholder"),
             &profile.identity_file,
             |next| Message::SshProfileModalFieldChanged(SshProfileField::IdentityFile, next),
             palette,
         )
         .into()
     } else {
-        modal_password("Password", &profile.password, palette).into()
+        modal_password(
+            crate::t!("settings.ssh.password"),
+            &profile.password,
+            palette,
+        )
+        .into()
     };
 
     let mut items: Vec<Element<Message>> = Vec::new();
     items.push(
         modal_input(
-            "Display Name (optional)",
+            crate::t!("settings.ssh.display_name"),
             &profile.name,
             |next| Message::SshProfileModalFieldChanged(SshProfileField::Name, next),
             palette,
@@ -477,7 +498,7 @@ fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'
     items.push(
         row![
             modal_input(
-                "Host",
+                crate::t!("settings.ssh.host"),
                 &profile.host,
                 |next| { Message::SshProfileModalFieldChanged(SshProfileField::Host, next) },
                 palette
@@ -485,7 +506,7 @@ fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'
             .width(Length::Fill),
             text(":").size(13).color(palette.text_secondary),
             modal_input(
-                "Port",
+                crate::t!("settings.ssh.port"),
                 &profile.port,
                 |next| { Message::SshProfileModalFieldChanged(SshProfileField::Port, next) },
                 palette
@@ -499,7 +520,7 @@ fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'
     );
     items.push(
         modal_input(
-            "Username",
+            crate::t!("settings.ssh.username"),
             &profile.user,
             |next| Message::SshProfileModalFieldChanged(SshProfileField::User, next),
             palette,
@@ -507,7 +528,7 @@ fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'
         .into(),
     );
     items.push(
-        text("Authentication")
+        text(crate::t!("settings.ssh.authentication"))
             .size(11)
             .color(palette.text_secondary)
             .into(),
@@ -521,9 +542,9 @@ fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'
     items.push(auth_input);
     items.push(
         text(if matches!(profile.auth_method, SshAuthMethod::Password) {
-            "Password is stored securely in your OS keychain"
+            crate::t!("settings.ssh.auth_hint_password")
         } else {
-            "Key file path is stored in config"
+            crate::t!("settings.ssh.auth_hint_key_file")
         })
         .size(10)
         .color(Color {
@@ -534,7 +555,7 @@ fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'
     );
     items.push(
         checkbox(profile.proxy_command_enabled)
-            .label("Use Proxy Command")
+            .label(crate::t!("settings.ssh.use_proxy_command"))
             .on_toggle(|enabled| {
                 Message::SshProfileModalFieldChanged(
                     SshProfileField::ProxyCommandEnabled,
@@ -548,7 +569,7 @@ fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'
     if profile.proxy_command_enabled {
         items.push(
             modal_input(
-                "ProxyCommand  (e.g. cloudflared access ssh --hostname %h)",
+                crate::t!("settings.ssh.proxy_command_placeholder"),
                 &profile.proxy_command,
                 |next| Message::SshProfileModalFieldChanged(SshProfileField::ProxyCommand, next),
                 palette,
@@ -556,7 +577,7 @@ fn profile_form<'a>(profile: &'a SshProfileDraft, palette: Palette) -> Element<'
             .into(),
         );
         items.push(
-            text("%h and %p are replaced with host and port")
+            text(crate::t!("settings.ssh.proxy_command_hint"))
                 .size(10)
                 .color(Color {
                     a: 0.35,
@@ -584,9 +605,9 @@ fn auth_method_button<'a>(
 }
 
 fn status_banner<'a>(message: &'a str, palette: Palette) -> Element<'a, Message> {
-    let is_saved = message == "SSH profiles saved."
-        || message == "Connection successful."
-        || message == "Testing connection...";
+    let is_saved = message == crate::t!("settings.ssh.status.profiles_saved")
+        || message == crate::t!("settings.ssh.status.connection_successful")
+        || message == crate::t!("settings.ssh.status.testing_connection");
     let color = if is_saved {
         palette.accent
     } else {
