@@ -66,6 +66,7 @@ pub const DEFAULT_SHORTCUT_DUPLICATE_TAB: &str = "Ctrl+Shift+D";
 pub const DEFAULT_TERMINAL_FONT_SIZE: f32 = 14.0;
 pub const DEFAULT_TERMINAL_PADDING_X: f32 = 4.0;
 pub const DEFAULT_TERMINAL_PADDING_Y: f32 = 4.0;
+pub const DEFAULT_TERMINAL_SCROLLBACK: usize = 10_000;
 const DEJAVU_SANS_MONO: &[u8] = include_bytes!("../fonts/DejaVuSansMono.ttf");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
@@ -128,6 +129,7 @@ pub struct TerminalConfig {
     pub font_size: f32,
     pub padding_x: f32,
     pub padding_y: f32,
+    pub scrollback_lines: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -193,6 +195,7 @@ struct TerminalFileConfig {
     font_size: Option<f32>,
     padding_x: Option<f32>,
     padding_y: Option<f32>,
+    scrollback_lines: Option<usize>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -249,6 +252,7 @@ pub struct AppConfigUpdates {
     pub shortcut_font_size_decrease: Option<String>,
     pub shortcut_font_size_reset: Option<String>,
     pub shortcut_duplicate_tab: Option<String>,
+    pub terminal_scrollback: Option<usize>,
 }
 
 impl Default for AppConfig {
@@ -267,6 +271,7 @@ impl Default for AppConfig {
                 font_size: DEFAULT_TERMINAL_FONT_SIZE,
                 padding_x: DEFAULT_TERMINAL_PADDING_X,
                 padding_y: DEFAULT_TERMINAL_PADDING_Y,
+                scrollback_lines: DEFAULT_TERMINAL_SCROLLBACK,
             },
             theme: ThemeConfig {
                 color_scheme: "Catppuccin Mocha".to_string(),
@@ -340,6 +345,10 @@ impl AppConfig {
         }
         if let Some(py) = updates.terminal_padding_y {
             self.terminal.padding_y = sanitize_padding(py);
+        }
+        if let Some(lines) = updates.terminal_scrollback {
+            self.terminal.scrollback_lines =
+                sanitize_scrollback(lines, self.terminal.scrollback_lines);
         }
         if let Some(scheme) = updates.color_scheme {
             self.theme.color_scheme = scheme;
@@ -453,6 +462,10 @@ impl AppConfig {
             }
             if let Some(py) = term.padding_y {
                 self.terminal.padding_y = sanitize_padding(py);
+            }
+            if let Some(lines) = term.scrollback_lines {
+                self.terminal.scrollback_lines =
+                    sanitize_scrollback(lines, self.terminal.scrollback_lines);
             }
         }
 
@@ -641,6 +654,14 @@ fn sanitize_terminal_font_selection(value: &str) -> Option<String> {
     }
 }
 
+fn sanitize_scrollback(value: usize, fallback: usize) -> usize {
+    if (100..=1_000_000).contains(&value) {
+        value
+    } else {
+        fallback
+    }
+}
+
 fn sanitize_terminal_font_size(value: f32, fallback: f32) -> f32 {
     if value.is_finite() && (6.0..=72.0).contains(&value) {
         value
@@ -778,6 +799,7 @@ impl From<&AppConfig> for FileConfig {
                 font_size: Some(config.terminal.font_size),
                 padding_x: Some(config.terminal.padding_x),
                 padding_y: Some(config.terminal.padding_y),
+                scrollback_lines: Some(config.terminal.scrollback_lines),
             }),
             theme: Some(ThemeFileConfig {
                 color_scheme: if config.theme.color_scheme.is_empty() {
@@ -1217,6 +1239,49 @@ mod tests {
         let toml_str = toml::to_string_pretty(&file).unwrap();
 
         assert!(!toml_str.contains("[[ssh_profiles]]"));
+    }
+
+    #[test]
+    fn scrollback_sanitize_clamps_to_valid_range() {
+        let mut config = AppConfig::default();
+        assert_eq!(
+            config.terminal.scrollback_lines,
+            DEFAULT_TERMINAL_SCROLLBACK
+        );
+
+        // Value within range is accepted
+        config.apply_updates(AppConfigUpdates {
+            terminal_scrollback: Some(500),
+            ..Default::default()
+        });
+        assert_eq!(config.terminal.scrollback_lines, 500);
+
+        // Value below minimum keeps previous
+        config.apply_updates(AppConfigUpdates {
+            terminal_scrollback: Some(99),
+            ..Default::default()
+        });
+        assert_eq!(config.terminal.scrollback_lines, 500);
+
+        // Value above maximum keeps previous
+        config.apply_updates(AppConfigUpdates {
+            terminal_scrollback: Some(1_000_001),
+            ..Default::default()
+        });
+        assert_eq!(config.terminal.scrollback_lines, 500);
+
+        // Boundary values are accepted
+        config.apply_updates(AppConfigUpdates {
+            terminal_scrollback: Some(100),
+            ..Default::default()
+        });
+        assert_eq!(config.terminal.scrollback_lines, 100);
+
+        config.apply_updates(AppConfigUpdates {
+            terminal_scrollback: Some(1_000_000),
+            ..Default::default()
+        });
+        assert_eq!(config.terminal.scrollback_lines, 1_000_000);
     }
 
     #[test]
