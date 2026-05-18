@@ -87,14 +87,23 @@ pub fn view<'a>(
     );
 
     let scrollback_section = section(
-        "Scrollback",
-        column(vec![input_row_with_suffix(
-            "Scrollback",
-            &draft.terminal_scrollback,
-            SettingsField::TerminalScrollback,
-            "lines",
-            palette,
-        )])
+        "Scrolling",
+        column(vec![
+            input_row_with_suffix(
+                "Scrollback",
+                &draft.terminal_scrollback,
+                SettingsField::TerminalScrollback,
+                "lines",
+                palette,
+            ),
+            input_row_with_suffix(
+                "Scroll speed",
+                &draft.terminal_scroll_speed,
+                SettingsField::TerminalScrollSpeed,
+                "x",
+                palette,
+            ),
+        ])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into(),

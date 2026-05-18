@@ -32,6 +32,7 @@ pub enum SettingsField {
     TerminalPaddingX,
     TerminalPaddingY,
     TerminalScrollback,
+    TerminalScrollSpeed,
     ThemeColorScheme,
     ThemeForeground,
     ThemeBackground,
@@ -213,6 +214,7 @@ pub struct SettingsDraft {
     pub terminal_padding_x: String,
     pub terminal_padding_y: String,
     pub terminal_scrollback: String,
+    pub terminal_scroll_speed: String,
     pub bracketed_paste: bool,
     pub multiline_paste_confirm: bool,
     pub color_scheme: String,
@@ -249,6 +251,7 @@ impl SettingsDraft {
             terminal_padding_x: format!("{:.1}", config.terminal.padding_x),
             terminal_padding_y: format!("{:.1}", config.terminal.padding_y),
             terminal_scrollback: config.terminal.scrollback_lines.to_string(),
+            terminal_scroll_speed: format!("{:.1}", config.terminal.scroll_multiplier),
             bracketed_paste: config.terminal.bracketed_paste,
             multiline_paste_confirm: config.terminal.multiline_paste_confirm,
             color_scheme: config.theme.color_scheme.clone(),
@@ -426,6 +429,7 @@ impl SettingsDraft {
             SettingsField::TerminalPaddingX => self.terminal_padding_x = value,
             SettingsField::TerminalPaddingY => self.terminal_padding_y = value,
             SettingsField::TerminalScrollback => self.terminal_scrollback = value,
+            SettingsField::TerminalScrollSpeed => self.terminal_scroll_speed = value,
             SettingsField::ThemeColorScheme => {
                 self.color_scheme = value.clone();
                 if let Some(preset) = crate::terminal::theme::find_preset(&value) {
@@ -459,6 +463,7 @@ impl SettingsDraft {
             terminal_padding_x: parse_f32(&self.terminal_padding_x),
             terminal_padding_y: parse_f32(&self.terminal_padding_y),
             terminal_scrollback: self.terminal_scrollback.trim().parse::<usize>().ok(),
+            terminal_scroll_multiplier: parse_f32(&self.terminal_scroll_speed),
             terminal_bracketed_paste: Some(self.bracketed_paste),
             terminal_multiline_paste_confirm: Some(self.multiline_paste_confirm),
             color_scheme: Some(self.color_scheme.clone()),
