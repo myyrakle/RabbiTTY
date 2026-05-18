@@ -130,6 +130,14 @@ impl TerminalTab {
         self.engine.cursor_position()
     }
 
+    pub fn cursor_cell(&self) -> Option<(usize, usize)> {
+        self.engine.cursor_cell()
+    }
+
+    pub fn cursor_color(&self) -> [f32; 4] {
+        self.engine.cursor_color()
+    }
+
     pub fn selected_text(&self) -> Option<String> {
         let sel = self.selection.as_ref().filter(|s| !s.is_empty())?;
         let cells = self.engine.render_cells();

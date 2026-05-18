@@ -8,9 +8,11 @@ struct Uniforms {
 var<uniform> uniforms : Uniforms;
 
 struct VertexIn {
-    @location(0) quad_pos : vec2<f32>,
-    @location(1) cell_pos : vec2<u32>,
-    @location(2) color    : vec4<f32>,
+    @location(0) quad_pos    : vec2<f32>,
+    @location(1) cell_pos    : vec2<u32>,
+    @location(2) rect_offset : vec2<f32>,
+    @location(3) rect_size   : vec2<f32>,
+    @location(4) color       : vec4<f32>,
 };
 
 struct VertexOut {
@@ -21,7 +23,8 @@ struct VertexOut {
 @vertex
 fn vs_main(input : VertexIn) -> VertexOut {
     let cell = vec2<f32>(input.cell_pos);
-    let pixel = (cell + input.quad_pos) * uniforms.cell_size + uniforms.offset;
+    let pixel = (cell + input.rect_offset + input.quad_pos * input.rect_size)
+        * uniforms.cell_size + uniforms.offset;
 
     // Convert to NDC (origin top-left)
     let ndc = vec2<f32>(

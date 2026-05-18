@@ -153,11 +153,37 @@ impl TerminalEngine {
         (point.column.0, point.line.0.max(0) as usize)
     }
 
+    /// The renderable cursor cell as `(col, row)`, or `None` when the cursor is
+    /// hidden or the viewport is scrolled away from the latest output.
+    pub fn cursor_cell(&self) -> Option<(usize, usize)> {
+        let RenderableContent {
+            display_offset,
+            cursor,
+            ..
+        } = self.term.renderable_content();
+
+        if cursor.shape == CursorShape::Hidden || display_offset != 0 {
+            return None;
+        }
+
+        let col = cursor.point.column.0;
+        let row = cursor.point.line.0 as usize;
+        if row < self.size.lines && col < self.size.columns {
+            Some((col, row))
+        } else {
+            None
+        }
+    }
+
+    /// The theme cursor color as linear RGBA (opaque).
+    pub fn cursor_color(&self) -> [f32; 4] {
+        rgb_to_rgba(self.theme.cursor_rgb(), 1.0)
+    }
+
     fn build_cells_into(&self, cells: &mut Vec<CellVisual>) {
         let RenderableContent {
             display_iter,
             display_offset,
-            cursor,
             colors,
             ..
         } = self.term.renderable_content();
@@ -239,33 +265,6 @@ impl TerminalEngine {
                     slot.bg = bg;
                     slot.underline = indexed.cell.flags.intersects(Flags::ALL_UNDERLINES);
                     slot.wide = indexed.cell.flags.contains(Flags::WIDE_CHAR);
-                }
-            }
-        }
-
-        if cursor.shape != CursorShape::Hidden && display_offset == 0 {
-            let cursor_col = cursor.point.column.0;
-            let cursor_line = cursor.point.line.0 as usize;
-
-            if cursor_line < self.size.lines && cursor_col < self.size.columns {
-                let slot = &mut cells[idx(cursor_line, cursor_col, self.size.columns)];
-                let fg = slot.fg;
-                let bg = slot.bg;
-
-                if bg[3] > 0.0 {
-                    slot.fg = bg;
-                    slot.bg = fg;
-                } else {
-                    let luma = 0.2126 * fg[0] + 0.7152 * fg[1] + 0.0722 * fg[2];
-                    let cursor_fg = if luma > 0.5 {
-                        [0.0, 0.0, 0.0, 1.0]
-                    } else {
-                        [1.0, 1.0, 1.0, 1.0]
-                    };
-                    let mut cursor_bg = fg;
-                    cursor_bg[3] = 1.0;
-                    slot.fg = cursor_fg;
-                    slot.bg = cursor_bg;
                 }
             }
         }

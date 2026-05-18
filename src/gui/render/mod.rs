@@ -27,6 +27,10 @@ pub struct TerminalProgram {
     pub selection: Option<Selection>,
     pub mouse_mode: bool,
     pub display_offset: usize,
+    pub cursor: Option<[u32; 2]>,
+    pub cursor_shape: crate::config::CursorShape,
+    pub cursor_visible: bool,
+    pub cursor_color: [f32; 4],
 }
 
 impl TerminalProgram {
@@ -196,6 +200,10 @@ impl ShaderProgram<Message> for TerminalProgram {
             terminal_font_size: self.terminal_font_size,
             selection: self.selection,
             display_offset: self.display_offset,
+            cursor: self.cursor,
+            cursor_shape: self.cursor_shape,
+            cursor_visible: self.cursor_visible,
+            cursor_color: self.cursor_color,
         }
     }
 
@@ -226,6 +234,10 @@ pub struct TerminalPipeline {
     last_font_size: f32,
     last_selection: Option<Selection>,
     last_display_offset: usize,
+    last_cursor: Option<[u32; 2]>,
+    last_cursor_shape: crate::config::CursorShape,
+    last_cursor_visible: bool,
+    last_cursor_color: [f32; 4],
 }
 
 impl Pipeline for TerminalPipeline {
@@ -242,6 +254,10 @@ impl Pipeline for TerminalPipeline {
             last_font_size: 0.0,
             last_selection: None,
             last_display_offset: 0,
+            last_cursor: None,
+            last_cursor_shape: crate::config::CursorShape::Block,
+            last_cursor_visible: false,
+            last_cursor_color: [0.0; 4],
         }
     }
 }
@@ -257,6 +273,10 @@ pub struct TerminalPrimitive {
     terminal_font_size: f32,
     selection: Option<Selection>,
     display_offset: usize,
+    cursor: Option<[u32; 2]>,
+    cursor_shape: crate::config::CursorShape,
+    cursor_visible: bool,
+    cursor_color: [f32; 4],
 }
 
 impl Primitive for TerminalPrimitive {
@@ -291,7 +311,11 @@ impl Primitive for TerminalPrimitive {
             && offset == pipeline.last_offset
             && (font_size - pipeline.last_font_size).abs() < 0.01
             && self.selection == pipeline.last_selection
-            && self.display_offset == pipeline.last_display_offset;
+            && self.display_offset == pipeline.last_display_offset
+            && self.cursor == pipeline.last_cursor
+            && self.cursor_shape == pipeline.last_cursor_shape
+            && self.cursor_visible == pipeline.last_cursor_visible
+            && self.cursor_color == pipeline.last_cursor_color;
 
         if unchanged {
             return;
@@ -305,8 +329,15 @@ impl Primitive for TerminalPrimitive {
         pipeline.last_font_size = font_size;
         pipeline.last_selection = self.selection;
         pipeline.last_display_offset = self.display_offset;
+        pipeline.last_cursor = self.cursor;
+        pipeline.last_cursor_shape = self.cursor_shape;
+        pipeline.last_cursor_visible = self.cursor_visible;
+        pipeline.last_cursor_color = self.cursor_color;
 
         let cells = self.cells.as_slice();
+
+        // Cursor is only drawn when visible (blink "on" phase).
+        let active_cursor = self.cursor.filter(|_| self.cursor_visible);
 
         pipeline
             .bg
@@ -317,6 +348,9 @@ impl Primitive for TerminalPrimitive {
             cells,
             self.selection.as_ref(),
             self.display_offset,
+            active_cursor,
+            self.cursor_shape,
+            self.cursor_color,
         );
 
         pipeline
@@ -331,6 +365,8 @@ impl Primitive for TerminalPrimitive {
             cell_size,
             self.selection.as_ref(),
             self.display_offset,
+            active_cursor.filter(|_| self.cursor_shape == crate::config::CursorShape::Block),
+            self.cursor_color,
         );
     }
 
@@ -385,7 +421,7 @@ impl Primitive for TerminalPrimitive {
             offscreen_pass.set_vertex_buffer(0, bg_pipeline.quad_buffer().slice(..));
             offscreen_pass.set_vertex_buffer(1, bg_pipeline.instance_buffer().slice(..));
 
-            let instance_count = self.cells.len().max(1) as u32;
+            let instance_count = bg_pipeline.instance_count().max(1) as u32;
             offscreen_pass.draw(0..6, 0..instance_count);
 
             if text_pipeline.instance_len() > 0 {

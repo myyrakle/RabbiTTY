@@ -294,6 +294,7 @@ impl TextPipelineData {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare_instances(
         &mut self,
         device: &wgpu::Device,
@@ -302,7 +303,20 @@ impl TextPipelineData {
         cell_size: [f32; 2],
         selection: Option<&crate::terminal::Selection>,
         display_offset: usize,
+        cursor: Option<[u32; 2]>,
+        cursor_color: [f32; 4],
     ) {
+        // Color for a glyph sitting under an opaque block cursor: contrast
+        // against the cursor color (mirrors the legacy engine-side logic).
+        let cursor_glyph_color = {
+            let luma =
+                0.2126 * cursor_color[0] + 0.7152 * cursor_color[1] + 0.0722 * cursor_color[2];
+            if luma > 0.5 {
+                [0.0, 0.0, 0.0, 1.0]
+            } else {
+                [1.0, 1.0, 1.0, 1.0]
+            }
+        };
         let cell_width = cell_size[0];
         let cell_height = cell_size[1];
 
@@ -353,12 +367,17 @@ impl TextPipelineData {
                 } else {
                     cell.bg
                 };
+            let color = if cursor == Some([cell.col as u32, cell.row as u32]) {
+                cursor_glyph_color
+            } else {
+                cell.fg
+            };
             self.glyph_instances.push(GlyphInstance {
                 pos,
                 size: info.size,
                 uv_min: info.uv_min,
                 uv_max: info.uv_max,
-                color: cell.fg,
+                color,
                 bg_color,
             });
         }
