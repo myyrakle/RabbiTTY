@@ -40,8 +40,15 @@ impl App {
         self.next_tab_id = self.next_tab_id.wrapping_add(1);
         let display_name = shell.display_name();
         self.session_history.record((&shell).into(), display_name);
-        let new_tab =
-            crate::gui::tab::TerminalTab::from_shell(shell, cols, rows, theme, tab_id, sender);
+        let new_tab = crate::gui::tab::TerminalTab::from_shell(
+            shell,
+            cols,
+            rows,
+            theme,
+            tab_id,
+            sender,
+            &self.config,
+        );
         self.tabs.push(new_tab);
         self.active_tab = self.tabs.len() - 1;
         self.show_shell_picker = false;

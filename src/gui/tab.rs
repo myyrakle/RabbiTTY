@@ -1,4 +1,4 @@
-use crate::config::SshProfile;
+use crate::config::{AppConfig, SshProfile};
 use crate::gui::sftp::SftpDrawerState;
 use crate::session::{LaunchSpec, OutputEvent, Session, SessionError};
 use crate::terminal::{CellVisual, Selection, TerminalEngine, TerminalSize, TerminalTheme};
@@ -35,8 +35,17 @@ impl TerminalTab {
         theme: TerminalTheme,
         id: u64,
         output_tx: mpsc::UnboundedSender<OutputEvent>,
+        config: &AppConfig,
     ) -> Self {
-        Self::launch(shell, columns, lines, theme, id, output_tx)
+        Self::launch(
+            shell,
+            columns,
+            lines,
+            theme,
+            id,
+            output_tx,
+            config.terminal.scrollback_lines,
+        )
     }
 
     fn launch(
@@ -46,6 +55,7 @@ impl TerminalTab {
         theme: TerminalTheme,
         id: u64,
         output_tx: mpsc::UnboundedSender<OutputEvent>,
+        scrollback_lines: usize,
     ) -> Self {
         let size = TerminalSize::new(columns, lines);
 
@@ -73,7 +83,9 @@ impl TerminalTab {
             }
         };
 
-        let engine = TerminalEngine::new(size, 10_000, writer, theme);
+        // scrollback_lines is read from config at tab creation time;
+        // changing the setting later applies only to newly created tabs.
+        let engine = TerminalEngine::new(size, scrollback_lines, writer, theme);
 
         Self {
             id,

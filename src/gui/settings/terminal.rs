@@ -86,7 +86,22 @@ pub fn view<'a>(
         palette,
     );
 
-    column(vec![font_section, padding_section])
+    let scrollback_section = section(
+        "Scrollback",
+        column(vec![input_row_with_suffix(
+            "Scrollback",
+            &draft.terminal_scrollback,
+            SettingsField::TerminalScrollback,
+            "lines",
+            palette,
+        )])
+        .spacing(SPACING_NORMAL)
+        .width(Length::Fill)
+        .into(),
+        palette,
+    );
+
+    column(vec![font_section, padding_section, scrollback_section])
         .spacing(SPACING_NORMAL)
         .width(Length::Fill)
         .into()

@@ -31,6 +31,7 @@ pub enum SettingsField {
     TerminalFontSize,
     TerminalPaddingX,
     TerminalPaddingY,
+    TerminalScrollback,
     ThemeColorScheme,
     ThemeForeground,
     ThemeBackground,
@@ -211,6 +212,7 @@ pub struct SettingsDraft {
     pub terminal_font_size: String,
     pub terminal_padding_x: String,
     pub terminal_padding_y: String,
+    pub terminal_scrollback: String,
     pub color_scheme: String,
     pub foreground: String,
     pub background: String,
@@ -244,6 +246,7 @@ impl SettingsDraft {
             terminal_font_size: format!("{:.1}", config.terminal.font_size),
             terminal_padding_x: format!("{:.1}", config.terminal.padding_x),
             terminal_padding_y: format!("{:.1}", config.terminal.padding_y),
+            terminal_scrollback: config.terminal.scrollback_lines.to_string(),
             color_scheme: config.theme.color_scheme.clone(),
             foreground: format_rgb(config.theme.foreground),
             background: format_rgb(config.theme.background),
@@ -418,6 +421,7 @@ impl SettingsDraft {
             SettingsField::TerminalFontSize => self.terminal_font_size = value,
             SettingsField::TerminalPaddingX => self.terminal_padding_x = value,
             SettingsField::TerminalPaddingY => self.terminal_padding_y = value,
+            SettingsField::TerminalScrollback => self.terminal_scrollback = value,
             SettingsField::ThemeColorScheme => {
                 self.color_scheme = value.clone();
                 if let Some(preset) = crate::terminal::theme::find_preset(&value) {
@@ -450,6 +454,7 @@ impl SettingsDraft {
             terminal_font_size: parse_f32(&self.terminal_font_size),
             terminal_padding_x: parse_f32(&self.terminal_padding_x),
             terminal_padding_y: parse_f32(&self.terminal_padding_y),
+            terminal_scrollback: self.terminal_scrollback.trim().parse::<usize>().ok(),
             color_scheme: Some(self.color_scheme.clone()),
             foreground: parse_hex_color(&self.foreground),
             background: parse_hex_color(&self.background),
