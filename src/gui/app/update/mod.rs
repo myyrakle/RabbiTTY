@@ -594,6 +594,7 @@ impl App {
                 }
             }
             Message::TerminalWheelScroll(raw_delta) => {
+                let raw_delta = raw_delta * self.config.terminal.scroll_multiplier;
                 if self.active_tab != SETTINGS_TAB_INDEX
                     && let Some(tab) = self.tabs.get_mut(self.active_tab)
                 {
