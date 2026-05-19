@@ -1,6 +1,7 @@
 pub mod button;
 pub mod container;
 pub mod context_menu;
+pub mod hover_fade;
 pub mod ime_wrapper;
 pub mod tab_bar;
 
@@ -21,4 +22,5 @@ pub fn button_secondary(
 }
 
 pub use container::panel;
+pub use hover_fade::{HoverStyle, hover_fade};
 pub use tab_bar::tab_bar;

@@ -7,44 +7,33 @@ use iced::{Background, Border, Color, Element, Length};
 impl App {
     pub(in crate::gui) fn view_settings(&self) -> Element<'_, Message> {
         let palette = self.palette;
+        let animations_enabled = self.config.ui.animations_enabled;
         let mut category_items: Vec<Element<Message>> = Vec::new();
 
         for category in SettingsCategory::ALL {
             let is_active = category == self.settings_category;
             let icon = category.icon();
             let label = category.label();
-            let button_style = move |_theme: &iced::Theme, status: iced::widget::button::Status| {
-                let bg = if is_active {
-                    Color {
-                        a: 0.12,
-                        ..palette.text
-                    }
-                } else {
-                    match status {
-                        iced::widget::button::Status::Hovered => Color {
-                            a: 0.08,
-                            ..palette.text
+            // The background is painted by `hover_fade` behind the button so
+            // it can cross-fade on hover; the button itself stays transparent.
+            let button_style =
+                move |_theme: &iced::Theme, _status: iced::widget::button::Status| {
+                    iced::widget::button::Style {
+                        background: Some(Background::Color(Color::TRANSPARENT)),
+                        text_color: if is_active {
+                            palette.text
+                        } else {
+                            palette.text_secondary
                         },
-                        _ => Color::TRANSPARENT,
+                        border: Border {
+                            radius: RADIUS_NORMAL.into(),
+                            width: 0.0,
+                            color: Color::TRANSPARENT,
+                        },
+                        shadow: iced::Shadow::default(),
+                        snap: true,
                     }
                 };
-
-                iced::widget::button::Style {
-                    background: Some(Background::Color(bg)),
-                    text_color: if is_active {
-                        palette.text
-                    } else {
-                        palette.text_secondary
-                    },
-                    border: Border {
-                        radius: RADIUS_NORMAL.into(),
-                        width: 0.0,
-                        color: Color::TRANSPARENT,
-                    },
-                    shadow: iced::Shadow::default(),
-                    snap: true,
-                }
-            };
 
             let btn_content = row![text(icon).size(14), text(label).size(13),]
                 .spacing(SPACING_SMALL)
@@ -55,7 +44,36 @@ impl App {
                 .width(Length::Fill)
                 .on_press(Message::SelectSettingsCategory(category))
                 .style(button_style);
-            category_items.push(item.into());
+
+            let rest = crate::gui::components::HoverStyle {
+                background: if is_active {
+                    Color {
+                        a: 0.12,
+                        ..palette.text
+                    }
+                } else {
+                    Color::TRANSPARENT
+                },
+                border_color: Color::TRANSPARENT,
+                border_width: 0.0,
+                radius: RADIUS_NORMAL,
+            };
+            // Active items keep their fixed background; inactive ones brighten.
+            let hover = if is_active {
+                rest
+            } else {
+                crate::gui::components::HoverStyle {
+                    background: Color {
+                        a: 0.08,
+                        ..palette.text
+                    },
+                    ..rest
+                }
+            };
+
+            category_items.push(
+                crate::gui::components::hover_fade(item, rest, hover, animations_enabled).into(),
+            );
         }
 
         let sidebar = container(

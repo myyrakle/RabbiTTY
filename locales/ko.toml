@@ -31,6 +31,10 @@ ssh = "SSH"
 section_title = "언어"
 auto = "자동"
 
+[settings.appearance]
+animations_section = "애니메이션"
+animations = "애니메이션 사용"
+
 [settings.terminal]
 font_section = "글꼴"
 size = "크기"

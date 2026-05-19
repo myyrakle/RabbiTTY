@@ -31,6 +31,10 @@ ssh = "SSH"
 section_title = "Language"
 auto = "Auto"
 
+[settings.appearance]
+animations_section = "Animations"
+animations = "Enable animations"
+
 [settings.terminal]
 font_section = "Font"
 size = "Size"
