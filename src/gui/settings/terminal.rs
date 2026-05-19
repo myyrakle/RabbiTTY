@@ -8,7 +8,7 @@ use iced::widget::{column, row, text, toggler};
 use iced::{Alignment, Element, Length};
 
 pub fn view<'a>(
-    _config: &'a AppConfig,
+    config: &'a AppConfig,
     draft: &'a SettingsDraft,
     palette: Palette,
 ) -> Element<'a, Message> {
@@ -104,6 +104,7 @@ pub fn view<'a>(
                 })
                 .collect(),
             palette,
+            config.ui.animations_enabled,
         ),
         palette,
     );

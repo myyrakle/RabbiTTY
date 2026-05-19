@@ -71,6 +71,7 @@ pub const DEFAULT_BRACKETED_PASTE: bool = true;
 pub const DEFAULT_MULTILINE_PASTE_CONFIRM: bool = false;
 pub const DEFAULT_TERMINAL_SCROLL_MULTIPLIER: f32 = 1.0;
 pub const DEFAULT_CURSOR_BLINK: bool = true;
+pub const DEFAULT_ANIMATIONS_ENABLED: bool = true;
 const DEJAVU_SANS_MONO: &[u8] = include_bytes!("../fonts/DejaVuSansMono.ttf");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
@@ -173,6 +174,8 @@ pub struct UiConfig {
     pub window_height: f32,
     /// `None` = follow `LANG` env; otherwise a tag from `AVAILABLE_LOCALES`.
     pub language: Option<String>,
+    /// Whether smooth hover transition animations are enabled.
+    pub animations_enabled: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -243,6 +246,7 @@ struct UiFileConfig {
     window_width: Option<f32>,
     window_height: Option<f32>,
     language: Option<String>,
+    animations_enabled: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -296,6 +300,7 @@ pub struct AppConfigUpdates {
     pub window_height: Option<f32>,
     /// `None` = no change; `Some("auto"|"")` = clear; `Some("<tag>")` = set.
     pub language: Option<String>,
+    pub animations_enabled: Option<bool>,
     pub terminal_font_selection: Option<String>,
     pub terminal_font_size: Option<f32>,
     pub terminal_padding_x: Option<f32>,
@@ -335,6 +340,7 @@ impl Default for AppConfig {
                 window_width: DEFAULT_WINDOW_WIDTH,
                 window_height: DEFAULT_WINDOW_HEIGHT,
                 language: None,
+                animations_enabled: DEFAULT_ANIMATIONS_ENABLED,
             },
             terminal: TerminalConfig {
                 cell_width,
@@ -401,6 +407,9 @@ impl AppConfig {
         }
         if let Some(lang) = updates.language.as_deref() {
             self.ui.language = sanitize_language(lang);
+        }
+        if let Some(enabled) = updates.animations_enabled {
+            self.ui.animations_enabled = enabled;
         }
         let old_font = self.terminal.font_selection.clone();
         if let Some(selection) = updates.terminal_font_selection {
@@ -532,6 +541,9 @@ impl AppConfig {
             }
             if let Some(lang) = ui.language.as_deref() {
                 self.ui.language = sanitize_language(lang);
+            }
+            if let Some(enabled) = ui.animations_enabled {
+                self.ui.animations_enabled = enabled;
             }
         }
 
@@ -914,6 +926,7 @@ impl From<&AppConfig> for FileConfig {
                 window_width: Some(config.ui.window_width),
                 window_height: Some(config.ui.window_height),
                 language: config.ui.language.clone(),
+                animations_enabled: Some(config.ui.animations_enabled),
             }),
             terminal: Some(TerminalFileConfig {
                 cell_width: None,

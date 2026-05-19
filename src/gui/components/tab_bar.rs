@@ -1,4 +1,5 @@
 use crate::gui::app::Message;
+use crate::gui::components::{HoverStyle, hover_fade};
 use crate::gui::theme::Palette;
 use iced::widget::mouse_area;
 use iced::widget::{button, container, row, scrollable, text};
@@ -15,6 +16,7 @@ pub fn tab_bar<'a>(
     dragging_tab: Option<usize>,
     drag_target: Option<usize>,
     palette: Palette,
+    animations_enabled: bool,
 ) -> Element<'a, Message> {
     let mut tab_elements: Vec<Element<Message>> = Vec::new();
     let is_reordering =
@@ -41,7 +43,14 @@ pub fn tab_bar<'a>(
             tab_elements.push(gap.into());
         }
 
-        let tab_item = browser_tab(title, index, is_active, tab_alpha, palette);
+        let tab_item = browser_tab(
+            title,
+            index,
+            is_active,
+            tab_alpha,
+            palette,
+            animations_enabled,
+        );
         let is_terminal_tab = index != crate::gui::app::SETTINGS_TAB_INDEX;
         let mut tab_item = mouse_area(tab_item)
             .on_press(Message::TabSelected(index))
@@ -235,6 +244,7 @@ fn browser_tab<'a>(
     is_active: bool,
     tab_alpha: f32,
     palette: Palette,
+    animations_enabled: bool,
 ) -> Element<'a, Message> {
     const MAX_TITLE_LEN: usize = 24;
     let display_title: std::borrow::Cow<'a, str> = if title.chars().count() > MAX_TITLE_LEN {
@@ -288,14 +298,13 @@ fn browser_tab<'a>(
         .align_y(iced::Alignment::Center);
 
     let inactive_alpha = tab_alpha.clamp(0.0, 1.0);
-    let tab_button = button(tab_content).padding([6, 12]).style(
+    // The tab background is painted by `hover_fade` so it can cross-fade on
+    // hover; the button itself stays transparent.
+    let tab_button_inner = button(tab_content).padding([6, 12]).style(
         move |_theme: &Theme, status: button::Status| {
             if is_active {
                 button::Style {
-                    background: Some(Background::Color(Color {
-                        a: inactive_alpha,
-                        ..palette.background
-                    })),
+                    background: Some(Background::Color(Color::TRANSPARENT)),
                     text_color: palette.text,
                     border: Border::default(),
                     shadow: iced::Shadow::default(),
@@ -304,14 +313,7 @@ fn browser_tab<'a>(
             } else {
                 let hovered = matches!(status, button::Status::Hovered);
                 button::Style {
-                    background: Some(Background::Color(if hovered {
-                        Color {
-                            a: 0.08,
-                            ..palette.text
-                        }
-                    } else {
-                        Color::TRANSPARENT
-                    })),
+                    background: Some(Background::Color(Color::TRANSPARENT)),
                     text_color: if hovered {
                         palette.text
                     } else {
@@ -323,6 +325,38 @@ fn browser_tab<'a>(
                 }
             }
         },
+    );
+
+    let (rest_bg, hover_bg) = if is_active {
+        let active_bg = Color {
+            a: inactive_alpha,
+            ..palette.background
+        };
+        (active_bg, active_bg)
+    } else {
+        (
+            Color::TRANSPARENT,
+            Color {
+                a: 0.08,
+                ..palette.text
+            },
+        )
+    };
+    let tab_button = hover_fade(
+        tab_button_inner,
+        HoverStyle {
+            background: rest_bg,
+            border_color: Color::TRANSPARENT,
+            border_width: 0.0,
+            radius: 0.0,
+        },
+        HoverStyle {
+            background: hover_bg,
+            border_color: Color::TRANSPARENT,
+            border_width: 0.0,
+            radius: 0.0,
+        },
+        animations_enabled,
     );
 
     if is_active {

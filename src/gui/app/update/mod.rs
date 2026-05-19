@@ -448,6 +448,10 @@ impl App {
                 self.settings_draft.blur_enabled = enabled;
                 return self.apply_settings(true);
             }
+            Message::SettingsAnimationsToggled(enabled) => {
+                self.settings_draft.animations_enabled = enabled;
+                return self.apply_settings(true);
+            }
             Message::SettingsBracketedPasteToggled(enabled) => {
                 self.settings_draft.bracketed_paste = enabled;
                 return self.apply_settings(true);

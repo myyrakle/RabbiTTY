@@ -61,6 +61,7 @@ impl App {
             self.dragging_tab,
             self.drag_target,
             palette,
+            self.config.ui.animations_enabled,
         );
 
         let main_content: Element<Message> = if self.active_tab == SETTINGS_TAB_INDEX {
@@ -344,36 +345,50 @@ impl App {
                 ]
                 .spacing(1);
 
+                // The hover background is painted by `hover_fade`; the button
+                // itself stays transparent.
+                let session_btn = button(label_col)
+                    .style(
+                        move |_theme: &iced::Theme, _status: iced::widget::button::Status| {
+                            iced::widget::button::Style {
+                                background: Some(Background::Color(Color::TRANSPARENT)),
+                                text_color: palette.text,
+                                border: Border {
+                                    radius: RADIUS_SMALL.into(),
+                                    width: 0.0,
+                                    color: Color::TRANSPARENT,
+                                },
+                                shadow: iced::Shadow::default(),
+                                snap: false,
+                            }
+                        },
+                    )
+                    .padding([6, 10])
+                    .width(Length::Fixed(240.0))
+                    .on_press(Message::LaunchFromHistory(i));
+
+                let rest = crate::gui::components::HoverStyle {
+                    background: Color::TRANSPARENT,
+                    border_color: Color::TRANSPARENT,
+                    border_width: 0.0,
+                    radius: RADIUS_SMALL,
+                };
+                let hover = crate::gui::components::HoverStyle {
+                    background: Color {
+                        a: 0.08,
+                        ..palette.text
+                    },
+                    ..rest
+                };
+
                 content.push(
-                    button(label_col)
-                        .style(
-                            move |_theme: &iced::Theme, status: iced::widget::button::Status| {
-                                let hovered =
-                                    matches!(status, iced::widget::button::Status::Hovered);
-                                iced::widget::button::Style {
-                                    background: Some(Background::Color(if hovered {
-                                        Color {
-                                            a: 0.08,
-                                            ..palette.text
-                                        }
-                                    } else {
-                                        Color::TRANSPARENT
-                                    })),
-                                    text_color: palette.text,
-                                    border: Border {
-                                        radius: RADIUS_SMALL.into(),
-                                        width: 0.0,
-                                        color: Color::TRANSPARENT,
-                                    },
-                                    shadow: iced::Shadow::default(),
-                                    snap: false,
-                                }
-                            },
-                        )
-                        .padding([6, 10])
-                        .width(Length::Fixed(240.0))
-                        .on_press(Message::LaunchFromHistory(i))
-                        .into(),
+                    crate::gui::components::hover_fade(
+                        session_btn,
+                        rest,
+                        hover,
+                        self.config.ui.animations_enabled,
+                    )
+                    .into(),
                 );
             }
         }

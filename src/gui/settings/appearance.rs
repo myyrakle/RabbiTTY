@@ -6,11 +6,11 @@ use crate::gui::settings::{
 };
 use crate::gui::theme::{Palette, SPACING_NORMAL};
 use crate::i18n::AVAILABLE_LOCALES;
-use iced::widget::{checkbox, column, combo_box, row, text};
+use iced::widget::{checkbox, column, combo_box, row, text, toggler};
 use iced::{Alignment, Element, Length};
 
 pub fn view<'a>(
-    _config: &'a AppConfig,
+    config: &'a AppConfig,
     draft: &'a SettingsDraft,
     font_combo_state: &'a combo_box::State<TerminalFontOption>,
     show_all_fonts: bool,
@@ -19,7 +19,7 @@ pub fn view<'a>(
 ) -> Element<'a, Message> {
     let language_section = section(
         t!("settings.language.section_title"),
-        language_picker(&draft.language, palette),
+        language_picker(&draft.language, palette, config.ui.animations_enabled),
         palette,
     );
 
@@ -111,12 +111,31 @@ pub fn view<'a>(
                 })
                 .collect(),
             palette,
+            config.ui.animations_enabled,
         ),
+        palette,
+    );
+
+    let animations_section = section(
+        crate::t!("settings.appearance.animations_section"),
+        row![
+            text(crate::t!("settings.appearance.animations"))
+                .size(13)
+                .width(Length::Fixed(160.0)),
+            toggler(draft.animations_enabled)
+                .on_toggle(Message::SettingsAnimationsToggled)
+                .size(18),
+        ]
+        .align_y(Alignment::Center)
+        .spacing(SPACING_NORMAL)
+        .width(Length::Fill)
+        .into(),
         palette,
     );
 
     column(vec![
         language_section,
+        animations_section,
         font_section,
         padding_section,
         cursor_section,
@@ -134,7 +153,11 @@ fn cursor_shape_label(shape: CursorShape) -> &'static str {
     }
 }
 
-fn language_picker<'a>(current: &'a str, palette: Palette) -> Element<'a, Message> {
+fn language_picker<'a>(
+    current: &'a str,
+    palette: Palette,
+    animations_enabled: bool,
+) -> Element<'a, Message> {
     let mut segments: Vec<(&'a str, Message, bool)> =
         Vec::with_capacity(AVAILABLE_LOCALES.len() + 1);
     segments.push((
@@ -152,5 +175,5 @@ fn language_picker<'a>(current: &'a str, palette: Palette) -> Element<'a, Messag
             current == locale.tag,
         ));
     }
-    segmented_control("", segments, palette)
+    segmented_control("", segments, palette, animations_enabled)
 }

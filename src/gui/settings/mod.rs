@@ -228,6 +228,7 @@ pub struct SettingsDraft {
     pub cursor: String,
     pub background_opacity: String,
     pub blur_enabled: bool,
+    pub animations_enabled: bool,
     pub macos_blur_radius: String,
     pub shortcut_new_tab: String,
     pub shortcut_close_tab: String,
@@ -268,6 +269,7 @@ impl SettingsDraft {
             cursor: format_rgb(config.theme.cursor),
             background_opacity: format!("{:.2}", config.theme.background_opacity),
             blur_enabled: config.theme.blur_enabled,
+            animations_enabled: config.ui.animations_enabled,
             macos_blur_radius: format!("{}", config.theme.macos_blur_radius),
             shortcut_new_tab: config.shortcuts.new_tab.clone(),
             shortcut_close_tab: config.shortcuts.close_tab.clone(),
@@ -468,6 +470,7 @@ impl SettingsDraft {
 
         let mut updates = AppConfigUpdates {
             language: Some(self.language.clone()),
+            animations_enabled: Some(self.animations_enabled),
             terminal_font_selection: Some(self.terminal_font_selection.clone()),
             terminal_font_size: parse_f32(&self.terminal_font_size),
             terminal_padding_x: parse_f32(&self.terminal_padding_x),
@@ -685,11 +688,18 @@ pub fn segmented_control<'a>(
     label: &'a str,
     segments: Vec<(&'a str, Message, bool)>,
     palette: Palette,
+    animations_enabled: bool,
 ) -> Element<'a, Message> {
     let buttons: Vec<Element<'a, Message>> = segments
         .into_iter()
         .map(|(segment_label, message, selected)| {
-            segment_button(segment_label, message, selected, palette)
+            segment_button(
+                segment_label,
+                message,
+                selected,
+                palette,
+                animations_enabled,
+            )
         })
         .collect();
 
@@ -708,12 +718,16 @@ fn segment_button<'a>(
     message: Message,
     selected: bool,
     palette: Palette,
+    animations_enabled: bool,
 ) -> Element<'a, Message> {
     let accent = palette.accent;
     let text_color = palette.text;
     let surface = palette.surface;
 
-    button(
+    // The visible background + border is painted by `hover_fade` behind the
+    // button so it can cross-fade on hover; the button itself stays
+    // transparent.
+    let inner = button(
         text(label)
             .size(13)
             .color(if selected { accent } else { text_color }),
@@ -721,27 +735,51 @@ fn segment_button<'a>(
     .on_press(message)
     .padding([6, 14])
     .style(move |_theme: &iced::Theme, _status| button::Style {
-        background: Some(Background::Color(Color {
-            a: if selected { 0.25 } else { 0.12 },
-            ..surface
-        })),
+        background: Some(Background::Color(Color::TRANSPARENT)),
         text_color: if selected { accent } else { text_color },
         border: Border {
             radius: RADIUS_SMALL.into(),
-            width: if selected { 1.5 } else { 1.0 },
-            color: if selected {
-                accent
-            } else {
-                Color {
-                    a: 0.15,
-                    ..text_color
-                }
-            },
+            width: 0.0,
+            color: Color::TRANSPARENT,
         },
         shadow: Default::default(),
         snap: true,
-    })
-    .into()
+    });
+
+    let rest = if selected {
+        crate::gui::components::HoverStyle {
+            background: Color { a: 0.25, ..surface },
+            border_color: accent,
+            border_width: 1.5,
+            radius: RADIUS_SMALL,
+        }
+    } else {
+        crate::gui::components::HoverStyle {
+            background: Color { a: 0.12, ..surface },
+            border_color: Color {
+                a: 0.15,
+                ..text_color
+            },
+            border_width: 1.0,
+            radius: RADIUS_SMALL,
+        }
+    };
+    // Selected segments do not change on hover; non-selected ones brighten.
+    let hover = if selected {
+        rest
+    } else {
+        crate::gui::components::HoverStyle {
+            background: Color { a: 0.2, ..surface },
+            border_color: Color {
+                a: 0.28,
+                ..text_color
+            },
+            border_width: 1.0,
+            radius: RADIUS_SMALL,
+        }
+    };
+
+    crate::gui::components::hover_fade(inner, rest, hover, animations_enabled).into()
 }
 
 pub fn hint_text<'a>(msg: &'a str, palette: Palette) -> Element<'a, Message> {
