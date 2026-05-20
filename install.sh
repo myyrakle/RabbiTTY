@@ -6,7 +6,8 @@ set -e
 
 REPO="wHoIsDReAmer/RabbiTTY"
 BIN_DIR="${HOME}/.local/bin"
-APP_DIR="${HOME}/Applications"
+APP_NAME="Rabbitty.app"
+USER_APP_DIR="${HOME}/Applications"
 
 err() {
     printf 'error: %s\n' "$1" >&2
@@ -58,15 +59,40 @@ esac
 
 case "$target" in
     macos-*)
-        app_src=$(find "$tmp" -name 'Rabbitty.app' -type d -maxdepth 4 | head -n1)
-        [ -n "$app_src" ] || err "Rabbitty.app not found in archive."
-        mkdir -p "$APP_DIR"
-        rm -rf "${APP_DIR}/Rabbitty.app"
-        cp -R "$app_src" "$APP_DIR/"
-        xattr -dr com.apple.quarantine "${APP_DIR}/Rabbitty.app" 2>/dev/null || true
+        app_src=$(find "$tmp" -name "$APP_NAME" -type d -maxdepth 4 | head -n1)
+        [ -n "$app_src" ] || err "$APP_NAME not found in archive."
+
+        app_install_dir=""
+        if [ -d /Applications ]; then
+            if [ -w /Applications ]; then
+                rm -rf "/Applications/$APP_NAME"
+                cp -R "$app_src" "/Applications/"
+                app_install_dir="/Applications"
+            elif command -v osascript >/dev/null 2>&1; then
+                app_src_q=$(printf "%s" "$app_src" | sed "s/'/'\\\\''/g")
+                osa_cmd="rm -rf '/Applications/$APP_NAME' && cp -R '$app_src_q' '/Applications/'"
+                if osascript -e "do shell script \"$osa_cmd\" with administrator privileges" >/dev/null 2>&1; then
+                    app_install_dir="/Applications"
+                fi
+            fi
+        fi
+
+        if [ -z "$app_install_dir" ]; then
+            mkdir -p "$USER_APP_DIR"
+            rm -rf "${USER_APP_DIR}/$APP_NAME"
+            cp -R "$app_src" "$USER_APP_DIR/"
+            app_install_dir="$USER_APP_DIR"
+        fi
+
+        app_path="${app_install_dir}/$APP_NAME"
+        xattr -dr com.apple.quarantine "$app_path" 2>/dev/null || true
         mkdir -p "$BIN_DIR"
-        ln -sf "${APP_DIR}/Rabbitty.app/Contents/MacOS/rabbitty" "${BIN_DIR}/rabbitty"
-        printf '\nInstalled Rabbitty.app to %s\n' "$APP_DIR"
+        ln -sf "${app_path}/Contents/MacOS/rabbitty" "${BIN_DIR}/rabbitty"
+        if command -v osascript >/dev/null 2>&1; then
+            app_path_q=$(printf "%s" "$app_path" | sed "s/'/'\\\\''/g")
+            osascript -e "tell application \"Finder\" to update POSIX file '$app_path_q'" >/dev/null 2>&1 || true
+        fi
+        printf '\nInstalled %s to %s\n' "$APP_NAME" "$app_install_dir"
         printf 'CLI symlink at %s/rabbitty\n' "$BIN_DIR"
         ;;
     linux-*)

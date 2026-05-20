@@ -31,7 +31,7 @@ irm https://raw.githubusercontent.com/wHoIsDReAmer/RabbiTTY/main/install.ps1 | i
 cargo install --git https://github.com/wHoIsDReAmer/RabbiTTY
 ```
 
-The Unix script installs the binary to `~/.local/bin/rabbitty` and (on macOS) the `.app` bundle to `~/Applications`. The PowerShell script installs to `%LOCALAPPDATA%\Rabbitty` and adds it to your user PATH.
+The Unix script installs the binary to `~/.local/bin/rabbitty`. On macOS it installs `Rabbitty.app` to `/Applications` when possible (falls back to `~/Applications`) and links the CLI binary to `~/.local/bin/rabbitty`. The release page also includes a macOS `.dmg` for drag-and-drop installation. The PowerShell script installs to `%LOCALAPPDATA%\Rabbitty` and adds it to your user PATH.
 
 ## Goals
 

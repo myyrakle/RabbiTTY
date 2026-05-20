@@ -148,14 +148,32 @@ jobs:
           mkdir -p "${package_root}"
           cp -R "${app_path}" "${package_root}/"
           archive_path="${package_root}.zip"
-          (cd "${package_root}" && zip -r "../$(basename ${archive_path})" Rabbitty.app)
-          echo "archive=${archive_path}" >> "$GITHUB_OUTPUT"
+          (cd "${package_root}" && zip -r "../$(basename "${archive_path}")" Rabbitty.app)
+
+          dmg_staging="${package_root}-dmg"
+          rm -rf "${dmg_staging}"
+          mkdir -p "${dmg_staging}"
+          cp -R "${app_path}" "${dmg_staging}/Rabbitty.app"
+          ln -s /Applications "${dmg_staging}/Applications"
+
+          dmg_path="${package_root}.dmg"
+          hdiutil create \
+            -volname "Rabbitty Installer" \
+            -srcfolder "${dmg_staging}" \
+            -ov \
+            -format UDZO \
+            "${dmg_path}"
+
+          assets_dir="dist/release-assets-${{ matrix.id }}"
+          mkdir -p "${assets_dir}"
+          mv "${archive_path}" "${dmg_path}" "${assets_dir}/"
+          echo "archive_dir=${assets_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.id }}
-          path: ${{ steps.package_unix.outputs.archive || steps.package_windows.outputs.archive || steps.package_macos_app.outputs.archive }}
+          path: ${{ steps.package_unix.outputs.archive || steps.package_windows.outputs.archive || steps.package_macos_app.outputs.archive_dir }}
           if-no-files-found: error
           retention-days: 14
 
